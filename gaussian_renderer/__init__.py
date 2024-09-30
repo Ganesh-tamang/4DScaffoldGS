@@ -20,12 +20,10 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
     if visible_mask is None:
         visible_mask = torch.ones(pc.get_anchor.shape[0], dtype=torch.bool, device = pc.get_anchor.device)
     feat=feat
-    # feat = pc._anchor_feat[visible_mask]
-    
     anchor = means3d
     grid_offsets = pc._offset[visible_mask]
     grid_scaling = pc.get_scaling[visible_mask]
-    
+   
     ob_view = anchor - viewpoint_camera.camera_center.cuda()
     # dist
     ob_dist = ob_view.norm(dim=1, keepdim=True)
@@ -98,12 +96,13 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
     concatenated_all = torch.cat([concatenated_repeated, color, scale_rot, offsets], dim=-1)
     masked = concatenated_all[mask]
     scaling_repeat, repeat_anchor, color, scale_rot, offsets = masked.split([6, 3, 3, 7, 3], dim=-1)
-    
+   
     scaling = scaling_repeat[:,3:] * torch.sigmoid(scale_rot[:,:3]) # * (1+torch.sigmoid(repeat_dist))
     rot = pc.rotation_activation(scale_rot[:,3:7])
     
     # post-process offsets to get centers for gaussians
     offsets = offsets * scaling_repeat[:,:3]
+    xyz = repeat_anchor + offsets
 
     if is_training:
         return xyz, color, opacity, scaling, rot, neural_opacity, mask
@@ -180,11 +179,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         # feat = base*feat + base*pc._anchor_feat
         anc_scales = pc.scaling_activation(scales_final)
         anc_rotations = pc.rotation_activation(rotations_final) 
-        anc_opacity = pc.opacity_activation(opacity_final) 
-        feat = pc._anchor_feat
+        anc_opacity = pc.opacity_activation(opacity_final)
+      
+        # feat = pc._anchor_feat
 
-          
-    
     radii_pure = rasterizer.visible_filter(means3D = means3D_final,
         scales = anc_scales[:,:3],
         rotations = anc_rotations,
@@ -198,7 +196,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     else:
         xyz, color, ch_opacity, ch_scaling, ch_rot = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask], feat[visible_mask],visible_mask, is_training=is_training, stage=stage)
     
-
+   
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
     screenspace_points = torch.zeros_like(xyz, dtype=pc.get_anchor.dtype, requires_grad=True, device="cuda") + 0
     if retain_grad:
@@ -238,4 +236,5 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 "radii": radii,
                 'visible_mask':visible_mask,
                 }
+
 
