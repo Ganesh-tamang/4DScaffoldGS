@@ -9,3 +9,5 @@ screenshots
 data/
 data
 submodules/
+tb/
+tb_logs

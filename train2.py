@@ -137,7 +137,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         gaussians.update_learning_rate(iteration)
 
+       
+    # # changed later    
+    #     if iteration % 1000 == 0:
+    #         gaussians.oneupSHdegree()
 
+        # Pick a random Camera
+        # dynerf's branch
         if opt.dataloader and not load_in_memory:
             try:
                 viewpoint_cams = next(loader)
@@ -170,7 +176,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         visibility_filter_list = []
         viewspace_point_tensor_list = []
 
+
+        # for viewpoint_cam in viewpoint_cams:
+        #     print("ggfg", viewpoint_cam)
+#
         viewpoint_cam = viewpoint_cam.to("cuda")
+        # print(f"vuew pint = {viewpoint_cam.device}")
+        # voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe,background,stage=stage,cam_type=scene.dataset_type)
         retain_grad = (iteration < opt.update_until and iteration >= 0)
         # render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad)
         render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
@@ -248,13 +260,31 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if iteration < opt.update_until and iteration > opt.start_stat:
                 # add statis
                 gaussians.training_statis(viewspace_point_tensor, opacity, visibility_filter, offset_selection_mask, voxel_visible_mask)
-
                 # densification
                 if iteration > opt.update_from and iteration % opt.update_interval == 0 and gaussians.get_anchor.shape[0] < 150000:
                     # gaussians.prunes_anch()
                     
                     gaussians.adjust_anchor(check_interval=opt.update_interval, success_threshold=opt.success_threshold, grad_threshold=opt.densify_grad_threshold, min_opacity=opt.min_opacity)
-            
+            # Densification
+            # elif iteration > 15010 and iteration < 16500:
+            #     # add statis
+            #     gaussians.training_statis(viewspace_point_tensor, opacity, visibility_filter, offset_selection_mask, voxel_visible_mask)
+                
+            #     # densification
+            #     if iteration > opt.update_from and iteration % opt.update_interval == 0:
+            #         gaussians.adjust_anchor(check_interval=opt.update_interval, success_threshold=opt.success_threshold, grad_threshold=opt.densify_grad_threshold, min_opacity=opt.min_opacity)
+            # elif iteration == 15002:
+            #     print("asdl========================================")
+                # del gaussians.opacity_accum
+                # del gaussians.offset_gradient_accum
+                # del gaussians.offset_denom
+                # torch.cuda.empty_cache()
+                
+                # gaussians.opacity_accum = torch.zeros((gaussians.get_anchor.shape[0], 1), device="cuda")
+
+                # gaussians.offset_gradient_accum = torch.zeros((gaussians.get_anchor.shape[0]*gaussians.n_offsets, 1), device="cuda")
+                # gaussians.offset_denom = torch.zeros((gaussians.get_anchor.shape[0]*gaussians.n_offsets, 1), device="cuda")
+                # torch.cuda.empty_cache()
             # Optimizer step
             if iteration < opt.iterations:
                 gaussians.optimizer.step()

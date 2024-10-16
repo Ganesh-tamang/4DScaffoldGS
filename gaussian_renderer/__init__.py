@@ -13,7 +13,7 @@ from einops import repeat
 
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
-from scene.gaussian_model1 import GaussianModel
+from scene.gaussian_model import GaussianModel
 
 def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_Scalings,feat=None, visible_mask=None, is_training=False, stage="fine"):
     ## view frustum filtering for acceleration    
@@ -47,8 +47,8 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
     cat_local_view = torch.cat([feat, ob_view, ob_dist], dim=1) # [N, c+3+1]
     cat_local_view_wodist = torch.cat([feat, ob_view], dim=1) # [N, c+3]
     if pc.appearance_dim > 0:
-        camera_indicies = torch.ones_like(cat_local_view[:,0], dtype=torch.long, device=ob_dist.device) * viewpoint_camera.uid
-        # camera_indicies = torch.ones_like(cat_local_view[:,0], dtype=torch.long, device=ob_dist.device) * 10
+        # camera_indicies = torch.ones_like(cat_local_view[:,0], dtype=torch.long, device=ob_dist.device) * viewpoint_camera.uid
+        camera_indicies = torch.ones_like(cat_local_view[:,0], dtype=torch.long, device=ob_dist.device) * 10
         appearance = pc.get_appearance(camera_indicies)
 
     
@@ -111,7 +111,6 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
 
 # def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,stage="fine", override_color = None,cam_type=None, retain_grad=False, step=16000):
-
     """
     Render the scene. 
     
@@ -140,7 +139,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         raster_settings = viewpoint_camera['camera']
         time=torch.tensor(viewpoint_camera['time']).to(means3D.device).repeat(means3D.shape[0],1)
     
-
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
     
