@@ -43,7 +43,7 @@ class RemoteViewer(Mini3DViewer):
         # network
         self.socket = None
 
-        super().__init__(cfg, 'GaussianAvatars - Remote Viewer')
+        super().__init__(cfg, '4DScaffoldGS - Remote Viewer')
 
     def send_message(self, message_bytes, message_length):
         self.socket.sendall(message_length)

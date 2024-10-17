@@ -15,7 +15,7 @@ import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 
-def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_Scalings,feat=None, visible_mask=None, is_training=False, stage="fine", show_anchor=False):
+def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=None, visible_mask=None, is_training=False, stage="fine", show_anchor=False):
     ## view frustum filtering for acceleration    
     if visible_mask is None:
         visible_mask = torch.ones(pc.get_anchor.shape[0], dtype=torch.bool, device = pc.get_anchor.device)
@@ -124,7 +124,10 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
     # print("xyz shape = ",xyz.shape, "color shape = ", color.shape, "scaling =",scaling.shape, "rot shape=",rot.shape)
     if show_anchor:
         print("showing only anchors")
-        return anchor,color_per_anchor,max_opacity_values.unsqueeze(1), anchor_scaling,anchor_rot,neural_opacity, mask
+        # print(anchor_scaling.shape, anchor_scaling[0], anchor_rot.shape, anchor_rot[0])
+        # return anchor,color_per_anchor,max_opacity_values.unsqueeze(1), anchor_scaling,anchor_rot,neural_opacity, mask
+        return anchor, torch.ones_like(color_per_anchor)*0.9,torch.ones_like(max_opacity_values.unsqueeze(1))*0.9, anchor_scaling, anchor_rot,neural_opacity, mask
+
     if is_training:
         return xyz, color, opacity, scaling, rot, neural_opacity, mask
     else:
@@ -198,7 +201,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         # feat = base*feat + base*pc._anchor_feat
         anc_scales = pc.scaling_activation(scales_final)
         anc_rotations = pc.rotation_activation(rotations_final) 
-        anc_opacity = pc.opacity_activation(opacity_final)
+        # anc_opacity = pc.opacity_activation(opacity_final)
       
         # feat = pc._anchor_feat
 
@@ -211,9 +214,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     is_training = pc.get_color_mlp.training
     
     if is_training:
-        xyz, color, ch_opacity, ch_scaling, ch_rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask],feat[visible_mask], visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
+        xyz, color, ch_opacity, ch_scaling, ch_rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],feat[visible_mask], visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
     else:
-        xyz, color, ch_opacity, ch_scaling, ch_rot = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask], feat[visible_mask],visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
+        xyz, color, ch_opacity, ch_scaling, ch_rot = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask], feat[visible_mask],visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
     
    
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means

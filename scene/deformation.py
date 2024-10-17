@@ -66,7 +66,7 @@ class Deformation(nn.Module):
         # self.shs_deform = nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 16*3))
         self.feat_deform = nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 32))
 
-    def query_time(self, rays_pts_emb, scales_emb, rotations_emb, time_feature, time_emb):
+    def query_time(self, rays_pts_emb, time_emb):
 
         if self.no_grid: # NO
             h = torch.cat([rays_pts_emb[:,:3],time_emb[:,:1]],-1)
@@ -96,15 +96,15 @@ class Deformation(nn.Module):
         dx = self.static_mlp(grid_feature)
         return rays_pts_emb[:, :3] + dx
     def forward_dynamic(self,rays_pts_emb, scales_emb, rotations_emb, opacity_emb, time_feature, time_emb):
-        hidden = self.query_time(rays_pts_emb, scales_emb, rotations_emb, time_feature, time_emb)
+        hidden = self.query_time(rays_pts_emb, time_emb)
         if self.args.static_mlp: # NO
             mask = self.static_mlp(hidden)
-        elif self.args.empty_voxel:
+        elif self.args.empty_voxel: #no
             mask = self.empty_voxel(rays_pts_emb[:,:3])
         else:
             mask = torch.ones_like(opacity_emb[:,0]).unsqueeze(-1)
         # breakpoint()
-        if self.args.no_dx:
+        if self.args.no_dx: #no
             pts = rays_pts_emb[:,:3]
         else:
             dx = self.pos_deform(hidden)
@@ -124,13 +124,13 @@ class Deformation(nn.Module):
         else:
             dr = self.rotations_deform(hidden)
 
-            rotations = torch.zeros_like(rotations_emb[:,:4])
+            rotations = torch.zeros_like(rotations_emb[:,:4]) #no
             if self.args.apply_rotation:
                 rotations = batch_quaternion_multiply(rotations_emb, dr)
             else:
                 rotations = rotations_emb[:,:4] + dr
 
-        if self.args.no_do :
+        if self.args.no_do : #yes
             opacity = opacity_emb[:,:1] 
         else:
             do = self.opacity_deform(hidden) 
@@ -193,6 +193,7 @@ class deform_network(nn.Module):
         # times_emb = poc_fre(times_sel, self.time_poc)
         point_emb = poc_fre(point,self.pos_poc)
         scales_emb = poc_fre(scales,self.rotation_scaling_poc)
+        # scales_emb = scales
         rotations_emb = poc_fre(rotations,self.rotation_scaling_poc)
         # time_emb = poc_fre(times_sel, self.time_poc)
         # times_feature = self.timenet(time_emb)
