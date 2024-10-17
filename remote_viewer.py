@@ -78,6 +78,7 @@ class RemoteViewer(Mini3DViewer):
                 "view_projection_matrix": self.cam.full_proj_transform.T.flatten().tolist(),  # the transpose is required by gaussian splatting rasterizer
                 'timestep': self.timestep,
             }
+        # print("show splatt",dpg.get_value("_checkbox_show_splatting"), "show anchor",dpg.get_value("_checkbox_show_anchor") )
         message_str = json.dumps(message)
 
         message_bytes = message_str.encode("utf-8")
@@ -225,9 +226,11 @@ class RemoteViewer(Mini3DViewer):
                     # show splatting
                     def callback_show_splatting(sender, app_data):
                         self.need_update = True
+                    def callback_show_anchor(sender, app_data):
+                        self.need_update = True
                     
                     dpg.add_checkbox(label="show splatting ", default_value=True, callback=callback_show_splatting, tag="_checkbox_show_splatting")
-                    dpg.add_checkbox(label="show anchor", default_value=False, callback=callback_show_splatting, tag="_checkbox_show_anchor")
+                    dpg.add_checkbox(label="show anchor", default_value=False, callback=callback_show_anchor, tag="_checkbox_show_anchor")
 
                     # def callback_show_mesh(sender, app_data):
                     #     self.need_update = True
@@ -283,14 +286,12 @@ class RemoteViewer(Mini3DViewer):
                 # def callback_set_znear(sender, app_data):
                 #     self.cam.znear = app_data
                 #     self.need_update = True
-                # dpg.add_slider_float(label="near", width=155, min_value=0, max_value=2, format="%.5f", default_value=self.cam.znear, callback=callback_set_znear, tag="_slider_near")
-
-                # # far slider
+                # dpg.add_slider_float(label="near", width=155, min_value=0, max_value=2, format="%.5f", default_value=self.cam.znear, callback=callback_set_znear, tag="_slider_near")                # # far slider
                 # def callback_set_far(sender, app_data):
                 #     self.cam.zfar = app_data
                 #     self.need_update = True
                 # dpg.add_slider_float(label="far", width=155, min_value=1e-3, max_value=2, format="%.5f", default_value=self.cam.zfar, callback=callback_set_far, tag="_slider_far")
-
+               
                 # fov slider
                 def callback_set_fovy(sender, app_data):
                     self.cam.fovy = app_data

@@ -15,7 +15,7 @@ import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 
-def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_Scalings,feat=None, visible_mask=None, is_training=False, stage="fine"):
+def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_Scalings,feat=None, visible_mask=None, is_training=False, stage="fine", show_anchor=False):
     ## view frustum filtering for acceleration    
     if visible_mask is None:
         visible_mask = torch.ones(pc.get_anchor.shape[0], dtype=torch.bool, device = pc.get_anchor.device)
@@ -59,7 +59,12 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
         neural_opacity = pc.get_opacity_mlp(cat_local_view_wodist)
 
     # opacity mask generation
-    
+    if show_anchor:
+    # Find the index of the Gaussian with the maximum opacity for each anchor
+        max_opacity_indices = neural_opacity.argmax(dim=1)  # Shape [anchor_shape]
+        # Retrieve the maximum opacity values
+        max_opacity_values = neural_opacity.max(dim=1)[0]  # Shape [anchor shape]
+
     neural_opacity = neural_opacity.reshape([-1, 1])
    
     mask = (neural_opacity>0.0)
@@ -78,6 +83,10 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
             color = pc.get_color_mlp(cat_local_view)
         else:
             color = pc.get_color_mlp(cat_local_view_wodist)
+    
+    if show_anchor:
+    # Compute the maximum color for each anchor
+        color_per_anchor = color.view(anchor.shape[0], pc.n_offsets, 3)[torch.arange(anchor.shape[0]), max_opacity_indices] 
     color = color.reshape([anchor.shape[0]*pc.n_offsets, 3])# [mask]
 
     # get offset's cov
@@ -85,6 +94,14 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
         scale_rot = pc.get_cov_mlp(cat_local_view)
     else:
         scale_rot = pc.get_cov_mlp(cat_local_view_wodist)
+    if show_anchor:
+        anchor_scale_rot=scale_rot.view(anchor.shape[0], pc.n_offsets, 7)[torch.arange(anchor.shape[0]), max_opacity_indices]
+        # anchor_grid_Scaling =grid_scaling[torch.arange(anchor.shape[0]), max_opacity_indices]
+        # print("s=grid scaling:",grid_scaling.shape,anchor_grid_Scaling.shape)
+        anchor_scaling = grid_scaling[:,3:] * torch.sigmoid(anchor_scale_rot[:,:3]) # * (1+torch.sigmoid(repeat_dist))
+
+        anchor_rot = pc.rotation_activation(anchor_scale_rot[:,3:7])
+
     scale_rot = scale_rot.reshape([anchor.shape[0]*pc.n_offsets, 7]) # [mask]
     
     # offsets
@@ -98,19 +115,23 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,grid_
     scaling_repeat, repeat_anchor, color, scale_rot, offsets = masked.split([6, 3, 3, 7, 3], dim=-1)
    
     scaling = scaling_repeat[:,3:] * torch.sigmoid(scale_rot[:,:3]) # * (1+torch.sigmoid(repeat_dist))
+    
     rot = pc.rotation_activation(scale_rot[:,3:7])
     
     # post-process offsets to get centers for gaussians
     offsets = offsets * scaling_repeat[:,:3]
     xyz = repeat_anchor + offsets
-
+    # print("xyz shape = ",xyz.shape, "color shape = ", color.shape, "scaling =",scaling.shape, "rot shape=",rot.shape)
+    if show_anchor:
+        print("showing only anchors")
+        return anchor,color_per_anchor,max_opacity_values.unsqueeze(1), anchor_scaling,anchor_rot,neural_opacity, mask
     if is_training:
         return xyz, color, opacity, scaling, rot, neural_opacity, mask
     else:
         return xyz, color, opacity, scaling, rot
 
 # def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,stage="fine", override_color = None,cam_type=None, retain_grad=False, step=16000):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,stage="fine", override_color = None,cam_type=None, retain_grad=False, step=16000, show_anchor=False):
     """
     Render the scene. 
     
@@ -188,11 +209,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # visible_mask = (radii_pure > 0) & (anc_opacity.squeeze() > 0.005)
     visible_mask = radii_pure > 0
     is_training = pc.get_color_mlp.training
-
+    
     if is_training:
-        xyz, color, ch_opacity, ch_scaling, ch_rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask],feat[visible_mask], visible_mask, is_training=is_training, stage=stage)
+        xyz, color, ch_opacity, ch_scaling, ch_rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask],feat[visible_mask], visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
     else:
-        xyz, color, ch_opacity, ch_scaling, ch_rot = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask], feat[visible_mask],visible_mask, is_training=is_training, stage=stage)
+        xyz, color, ch_opacity, ch_scaling, ch_rot = generate_neural_gaussians(viewpoint_camera, pc,means3D_final[visible_mask],anc_scales[visible_mask], feat[visible_mask],visible_mask, is_training=is_training, stage=stage, show_anchor=show_anchor)
     
    
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means

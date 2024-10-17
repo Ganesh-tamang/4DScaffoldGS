@@ -119,7 +119,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
                 if custom_cam != None:
                     # net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-                    net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration)["render"]
+                    net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"])["render"]
+                    # print("show anchor", msg["show_anchor"], msg["show_splatting"])
            
                     # net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 # network_gui.send(net_image_bytes, dataset.source_path)
