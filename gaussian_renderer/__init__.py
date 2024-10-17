@@ -56,14 +56,11 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=
     if pc.add_opacity_dist:
         neural_opacity = pc.get_opacity_mlp(cat_local_view) # [N, k]
     else:
-        neural_opacity = pc.get_opacity_mlp(cat_local_view_wodist)
+        # neural_opacity = pc.get_opacity_mlp(cat_local_view_wodist)
+        # print("opacity shapesss",pc.get_opacity.repeat(1,pc.n_offsets).shape)
+        neural_opacity = pc.get_opacity[visible_mask].repeat(1,pc.n_offsets)
+        # print("neural opacity",neural_opacity.shape)
 
-    # opacity mask generation
-    if show_anchor:
-    # Find the index of the Gaussian with the maximum opacity for each anchor
-        max_opacity_indices = neural_opacity.argmax(dim=1)  # Shape [anchor_shape]
-        # Retrieve the maximum opacity values
-        max_opacity_values = neural_opacity.max(dim=1)[0]  # Shape [anchor shape]
 
     neural_opacity = neural_opacity.reshape([-1, 1])
    
@@ -84,24 +81,19 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=
         else:
             color = pc.get_color_mlp(cat_local_view_wodist)
     
-    if show_anchor:
+    # if show_anchor:
     # Compute the maximum color for each anchor
-        color_per_anchor = color.view(anchor.shape[0], pc.n_offsets, 3)[torch.arange(anchor.shape[0]), max_opacity_indices] 
+        # color_per_anchor = color.view(anchor.shape[0], pc.n_offsets, 3)[torch.arange(anchor.shape[0]), max_opacity_indices] 
     color = color.reshape([anchor.shape[0]*pc.n_offsets, 3])# [mask]
 
     # get offset's cov
     if pc.add_cov_dist:
         scale_rot = pc.get_cov_mlp(cat_local_view)
     else:
-        scale_rot = pc.get_cov_mlp(cat_local_view_wodist)
-    if show_anchor:
-        anchor_scale_rot=scale_rot.view(anchor.shape[0], pc.n_offsets, 7)[torch.arange(anchor.shape[0]), max_opacity_indices]
-        # anchor_grid_Scaling =grid_scaling[torch.arange(anchor.shape[0]), max_opacity_indices]
-        # print("s=grid scaling:",grid_scaling.shape,anchor_grid_Scaling.shape)
-        anchor_scaling = grid_scaling[:,3:] * torch.sigmoid(anchor_scale_rot[:,:3]) # * (1+torch.sigmoid(repeat_dist))
-
-        anchor_rot = pc.rotation_activation(anchor_scale_rot[:,3:7])
-
+        # scale_rot = pc.get_cov_mlp(cat_local_view_wodist)
+        scale_r = torch.cat((grid_scaling[:,3:], pc.get_rotation[visible_mask]), dim=1)
+        scale_rot = scale_r.unsqueeze(1).repeat(1, pc.n_offsets, 1)
+    
     scale_rot = scale_rot.reshape([anchor.shape[0]*pc.n_offsets, 7]) # [mask]
     
     # offsets
@@ -123,10 +115,12 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=
     xyz = repeat_anchor + offsets
     # print("xyz shape = ",xyz.shape, "color shape = ", color.shape, "scaling =",scaling.shape, "rot shape=",rot.shape)
     if show_anchor:
-        print("showing only anchors")
+        print("showing anchors")
         # print(anchor_scaling.shape, anchor_scaling[0], anchor_rot.shape, anchor_rot[0])
         # return anchor,color_per_anchor,max_opacity_values.unsqueeze(1), anchor_scaling,anchor_rot,neural_opacity, mask
-        return anchor, torch.ones_like(color_per_anchor)*0.9,torch.ones_like(max_opacity_values.unsqueeze(1))*0.9, anchor_scaling, anchor_rot,neural_opacity, mask
+        neural_opacity = torch.ones([anchor.shape[0],1],device="cuda:0")*0.8 
+        mask = neural_opacity > 0
+        return anchor, torch.ones([anchor.shape[0],3], device="cuda:0")*0.9, neural_opacity, torch.ones([anchor.shape[0],3],device="cuda:0")*0.01, pc.get_rotation[visible_mask], neural_opacity, mask
 
     if is_training:
         return xyz, color, opacity, scaling, rot, neural_opacity, mask

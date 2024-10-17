@@ -77,7 +77,7 @@ class ModelParams(ParamGroup):
         self.eval = False
         self.lod = 0
 
-        self.appearance_dim = 32
+        self.appearance_dim = 0
         self.lowpoly = False
         self.ds = 1
         self.ratio = 1 # sampling the input point cloud

@@ -314,7 +314,7 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
                          gaussians, scene, "coarse", tb_writer, 3000,timer)
     opt.start_stat = 500
     opt.update_from = 6000
-    opt.update_interval = 1000
+    opt.update_interval = 500
     opt.update_until = 10_000
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
