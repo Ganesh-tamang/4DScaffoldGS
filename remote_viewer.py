@@ -56,6 +56,7 @@ class RemoteViewer(Mini3DViewer):
                 "resolution_y": 0,
                 "do_training": self.training,
                 "keep_alive": True,
+                "show_anchor":dpg.get_value("_checkbox_show_anchor"),
             }
         else:
             message = {
@@ -69,6 +70,7 @@ class RemoteViewer(Mini3DViewer):
                 "keep_alive": True,
                 "scaling_modifier": dpg.get_value("_slider_scaling_modifier"),
                 "show_splatting": dpg.get_value("_checkbox_show_splatting"),
+                "show_anchor":dpg.get_value("_checkbox_show_anchor"),
                 # "show_mesh": dpg.get_value("_checkbox_show_mesh"),
                 # "mesh_opacity": dpg.get_value("_slider_mesh_opacity"),
                 # "use_original_mesh": dpg.get_value("_checkbox_use_original_mesh"),
@@ -116,9 +118,10 @@ class RemoteViewer(Mini3DViewer):
         messageLength = int.from_bytes(messageLength, 'little')
         message = self.socket.recv(messageLength)
         rec_dict = json.loads(message.decode("utf-8"))
+        # print("received json and time steps is",rec_dict["num_timesteps"])
 
         self.num_timesteps = rec_dict["num_timesteps"]
-        dpg.configure_item("_slider_timestep", max_value=self.num_timesteps - 1)
+        # dpg.configure_item("_slider_timestep", max_value=self.num_timesteps - 1)
         dpg.set_value("_log_num_points", rec_dict["num_points"])
     
     def reconnect(self):
@@ -222,7 +225,9 @@ class RemoteViewer(Mini3DViewer):
                     # show splatting
                     def callback_show_splatting(sender, app_data):
                         self.need_update = True
+                    
                     dpg.add_checkbox(label="show splatting ", default_value=True, callback=callback_show_splatting, tag="_checkbox_show_splatting")
+                    dpg.add_checkbox(label="show anchor", default_value=False, callback=callback_show_splatting, tag="_checkbox_show_anchor")
 
                     # def callback_show_mesh(sender, app_data):
                     #     self.need_update = True
@@ -232,9 +237,14 @@ class RemoteViewer(Mini3DViewer):
                     if sender == "_slider_timestep":
                         self.timestep = app_data
                     elif sender in ["_button_timestep_plus", "_mvKey_Right"]:
-                        self.timestep = min(self.timestep + 1, self.num_timesteps - 1)
+                        # self.timestep = min(self.timestep + 1, self.num_timesteps - 1)
+                        print(app_data)
+                        self.timestep = min(self.timestep +0.05,1)
+
                     elif sender in ["_button_timestep_minus", "_mvKey_Left"]:
-                        self.timestep = max(self.timestep - 1, 0)
+                        # self.timestep = max(self.timestep - 1, 0)
+                        self.timestep = max(self.timestep -0.05, 0)
+
                     elif sender == "_mvKey_Home":
                         self.timestep = 0
                     elif sender == "_mvKey_End":
@@ -242,17 +252,20 @@ class RemoteViewer(Mini3DViewer):
                     else:
                         print(sender)
                     dpg.set_value("_slider_timestep", self.timestep)
+                    print("time step=", self.timestep)
                     self.need_update = True
                 with dpg.group(horizontal=True):
-                    dpg.add_slider_int(label="timestep", tag='_slider_timestep', width=155, min_value=0, max_value=self.num_timesteps - 1, format="%d", default_value=0, callback=callback_set_current_frame)
+                    # dpg.add_slider_int(label="timestep", tag='_slider_timestep', width=155, min_value=0, max_value=self.num_timesteps - 1, format="%d", default_value=0, callback=callback_set_current_frame)
+                    dpg.add_slider_float(label="timestep", tag='_slider_timestep',default_value=0.0, min_value=0.0, max_value=1, format="%.3f",callback=callback_set_current_frame)
+                    # dpg.add_slider_int(label="timestep", tag='_slider_timestep', width=155, min_value=0, max_value=155, format="%d", default_value=1, callback=callback_set_current_frame)
                     dpg.add_button(label='-', tag="_button_timestep_minus", callback=callback_set_current_frame)
                     dpg.add_button(label='+', tag="_button_timestep_plus", callback=callback_set_current_frame)
 
                 # mesh_opacity slider
-                def callback_set_opacity(sender, app_data):
-                    if dpg.get_value("_checkbox_show_mesh"):
-                        self.need_update = True
-                dpg.add_slider_float(label="mesh opacity", width=155, min_value=0, max_value=1.0, format="%.2f", default_value=0.5, callback=callback_set_opacity, tag="_slider_mesh_opacity")
+                # def callback_set_opacity(sender, app_data):
+                #     if dpg.get_value("_checkbox_show_mesh"):
+                #         self.need_update = True
+                # dpg.add_slider_float(label="mesh opacity", width=155, min_value=0, max_value=1.0, format="%.2f", default_value=0.5, callback=callback_set_opacity, tag="_slider_mesh_opacity")
 
                 # # mesh_color picker
                 # def callback_change_mesh_color(sender, app_data):

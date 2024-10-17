@@ -306,12 +306,12 @@ def prepare_output_and_logger(expname):
 
     # Create Tensorboard writer
     tb_dir = "tb_logs"
-    if not os.path.exists(tb_dir):
-        os.makedirs(tb_dir)
+    # if not os.path.exists(tb_dir):
+    #     os.makedirs(tb_dir)
     exp_num = len(os.listdir(tb_dir))
     tb_writer = None
     if TENSORBOARD_FOUND:
-        tb_writer = SummaryWriter(f"tb/lego_feat_{exp_num}")
+        tb_writer = SummaryWriter(f"tb_logs/broom_feat_{exp_num}")
     else:
         print("Tensorboard not available: not logging progress")
     return tb_writer
@@ -392,7 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6500,7000,7500,8000,10000,11000,11500,12000,12500,13000,13500,14000,14500,15000,15500,16000,16500,17000,17500,18000,19000,19500,20000, 21000,22000,22500,23000,24000,24500,25000,26000])
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[20000, 23000,25000,26000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[500,1000, 2000,2500,3000,3500, 4000, 5000, 20000, 23000,25000,26000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[3000,13000,16000,20000,23000])
     
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[13000,16000,20000,23000,27000, 30_000])

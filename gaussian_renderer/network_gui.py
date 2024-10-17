@@ -76,7 +76,7 @@ def receive():
             world_view_transform[:,2] = -world_view_transform[:,2]
             full_proj_transform = torch.reshape(torch.tensor(msg["view_projection_matrix"]), (4, 4)).cuda()
             full_proj_transform[:,1] = -full_proj_transform[:,1]
-            timestep = msg["timestep"] if "timestep" in msg else None
+            timestep = abs(msg["timestep"]) if "timestep" in msg else None
             custom_cam = MiniCam(width, height, msg["fov_y"], msg["fov_x"], msg["z_near"], msg["z_far"], world_view_transform, full_proj_transform, timestep)
         except Exception as e:
             print("")
