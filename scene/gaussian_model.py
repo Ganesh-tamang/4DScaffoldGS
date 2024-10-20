@@ -510,6 +510,7 @@ class GaussianModel:
         PlyData([el]).write(path)
         
     def reset_opacity(self):
+        print("reset_opacity")
         opacities_new = inverse_sigmoid(torch.min(self.get_opacity, torch.ones_like(self.get_opacity)*0.01))
         optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")
         self._opacity = optimizable_tensors["opacity"]
@@ -605,14 +606,6 @@ class GaussianModel:
    
     # statis grad information to guide liftting. 
     def training_statis(self, viewspace_point_tensor, opacity, update_filter, offset_selection_mask, anchor_visible_mask):
-        # update opacity stats
-        if not viewspace_point_tensor.requires_grad:
-            viewspace_point_tensor.requires_grad = True
-
-    # Ensure gradients have been computed
-        if viewspace_point_tensor.grad is None:
-            raise RuntimeError("Gradients not computed for viewspace_point_tensor.")
-        
         temp_opacity = opacity.clone().view(-1).detach()
         temp_opacity[temp_opacity<0] = 0
         
@@ -623,16 +616,15 @@ class GaussianModel:
         self.anchor_demon[anchor_visible_mask] += 1
 
         # update neural gaussian statis
-        anchor_visible_mask = anchor_visible_mask.unsqueeze(dim=1).repeat([1, self.n_offsets]).view(-1)
-        combined_mask = torch.zeros_like(self.offset_gradient_accum, dtype=torch.bool).squeeze(dim=1)
+        anchor_visible_mask = anchor_visible_mask.unsqueeze(dim=1).repeat([1, self.n_offsets]).view(-1) # (N,K)
+        combined_mask = torch.zeros_like(self.offset_gradient_accum, dtype=torch.bool).squeeze(dim=1) #(N*K)
         combined_mask[anchor_visible_mask] = offset_selection_mask
         temp_mask = combined_mask.clone()
         combined_mask[temp_mask] = update_filter
         
-        grad_norm = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
+        grad_norm = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True) # N*K
         self.offset_gradient_accum[combined_mask] += grad_norm
         self.offset_denom[combined_mask] += 1
-
     
     def _prune_anchor_optimizer(self, mask):
         optimizable_tensors = {}
@@ -705,33 +697,33 @@ class GaussianModel:
     
 
         return final_point, mask_d    
-    def add_point_by_mask(self, selected_pts_mask, perturb=0):
-        selected_xyz = self._anchor[selected_pts_mask] 
-        new_xyz, mask = self.get_displayment(selected_xyz, self.get_xyz.detach(),perturb)
+    # def add_point_by_mask(self, selected_pts_mask, perturb=0):
+    #     selected_xyz = self._anchor[selected_pts_mask] 
+    #     new_xyz, mask = self.get_displayment(selected_xyz, self.get_xyz.detach(),perturb)
 
-        new_features_dc = self._features_dc[selected_pts_mask][mask]
-        new_features_rest = self._features_rest[selected_pts_mask][mask]
-        new_opacities = self._opacity[selected_pts_mask][mask]
+    #     new_features_dc = self._features_dc[selected_pts_mask][mask]
+    #     new_features_rest = self._features_rest[selected_pts_mask][mask]
+    #     new_opacities = self._opacity[selected_pts_mask][mask]
         
-        new_scaling = self._scaling[selected_pts_mask][mask]
-        new_rotation = self._rotation[selected_pts_mask][mask]
-        new_deformation_table = self._deformation_table[selected_pts_mask][mask]
+    #     new_scaling = self._scaling[selected_pts_mask][mask]
+    #     new_rotation = self._rotation[selected_pts_mask][mask]
+    #     new_deformation_table = self._deformation_table[selected_pts_mask][mask]
 
-        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table)
-        return selected_xyz, new_xyz
+    #     self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table)
+    #     return selected_xyz, new_xyz
 
-    def prune(self, max_grad, min_opacity, extent, max_screen_size):
-        prune_mask = (self.get_opacity < min_opacity).squeeze()
+    # def prune(self, max_grad, min_opacity, extent, max_screen_size):
+    #     prune_mask = (self.get_opacity < min_opacity).squeeze()
 
-        if max_screen_size:
-            big_points_vs = self.max_radii2D > max_screen_size
-            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
-            prune_mask = torch.logical_or(prune_mask, big_points_vs)
+    #     if max_screen_size:
+    #         big_points_vs = self.max_radii2D > max_screen_size
+    #         big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
+    #         prune_mask = torch.logical_or(prune_mask, big_points_vs)
 
-            prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
-        self.prune_points(prune_mask)
+    #         prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
+    #     self.prune_points(prune_mask)
 
-        torch.cuda.empty_cache()
+    #     torch.cuda.empty_cache()
     
     def standard_constaint(self):
         means3D = self._anchor.detach()
@@ -907,7 +899,7 @@ class GaussianModel:
                 self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
                 self._deformation_accum = torch.zeros((self.get_xyz.shape[0], 3), device="cuda")
                         
-    def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.0002, min_opacity=0.005):
+    def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.001, min_opacity=0.05):
         # # adding anchors
         grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]
         grads[grads.isnan()] = 0.0
@@ -930,10 +922,13 @@ class GaussianModel:
         self.offset_gradient_accum = torch.cat([self.offset_gradient_accum, padding_offset_gradient_accum], dim=0)
         
         # # prune anchors
-        prune_mask = (self.opacity_accum < min_opacity*self.anchor_demon).squeeze(dim=1)
-        anchors_mask = (self.anchor_demon > check_interval*success_threshold).squeeze(dim=1) # [N, 1]
-        prune_mask = torch.logical_and(prune_mask, anchors_mask) # [N] 
-        
+        # prune_mask = (self.opacity_accum < min_opacity*self.anchor_demon).squeeze(dim=1)
+        prune_mask = (self.opacity_accum < min_opacity*self.anchor_demon*self.n_offsets).squeeze(dim=1)
+        anchors_mask = (self.anchor_demon < check_interval*success_threshold).squeeze(dim=1) # [N, 1]
+        prune_mask1 = torch.logical_and(prune_mask, anchors_mask) # [N] 
+        # prune_mask2 = (self.opacity_accum < 0.04*self.anchor_demon*self.n_offsets).squeeze(dim=1)
+        prune_mask2 = (self.get_opacity < 0.008).squeeze(dim=1)
+        prune_mask = torch.logical_or(prune_mask1, prune_mask2) 
         # update offset_denom
         offset_denom = self.offset_denom.view([-1, self.n_offsets])[~prune_mask]
         offset_denom = offset_denom.view([-1, 1])

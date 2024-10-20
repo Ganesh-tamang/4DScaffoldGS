@@ -115,12 +115,18 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=
     xyz = repeat_anchor + offsets
     # print("xyz shape = ",xyz.shape, "color shape = ", color.shape, "scaling =",scaling.shape, "rot shape=",rot.shape)
     if show_anchor:
-        print("showing anchors")
+        # print("showing anchors")
         # print(anchor_scaling.shape, anchor_scaling[0], anchor_rot.shape, anchor_rot[0])
         # return anchor,color_per_anchor,max_opacity_values.unsqueeze(1), anchor_scaling,anchor_rot,neural_opacity, mask
         neural_opacity = torch.ones([anchor.shape[0],1],device="cuda:0")*0.8 
         mask = neural_opacity > 0
-        return anchor, torch.ones([anchor.shape[0],3], device="cuda:0")*0.9, neural_opacity, torch.ones([anchor.shape[0],3],device="cuda:0")*0.01, pc.get_rotation[visible_mask], neural_opacity, mask
+        colors = torch.zeros((pc.get_anchor.shape[0], 3), device="cuda:0")  # Assuming RGB color
+        threshold = int(pc.get_anchor.shape[0]*0.95)
+       
+# Assign white to the first 90% and yellow to the remaining 10%
+        colors[:threshold,:] = torch.tensor([1.0, 1.0, 1.0])
+        colors[threshold:,:] = torch.tensor([1.0, 0.0, 0.0])
+        return anchor, colors[visible_mask], neural_opacity, torch.ones([anchor.shape[0],3],device="cuda:0")*0.01, pc.get_rotation[visible_mask], neural_opacity, mask
 
     if is_training:
         return xyz, color, opacity, scaling, rot, neural_opacity, mask
@@ -128,7 +134,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=
         return xyz, color, opacity, scaling, rot
 
 # def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,stage="fine", override_color = None,cam_type=None, retain_grad=False, step=16000, show_anchor=False):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,stage="fine", override_color = None,cam_type=None, retain_grad=False, step=16000, show_anchor=False, opacity_limit=0.005):
     """
     Render the scene. 
     
@@ -204,7 +210,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = anc_rotations,
         cov3D_precomp = cov3D_precomp)
     # visible_mask = (radii_pure > 0) & (anc_opacity.squeeze() > 0.005)
-    visible_mask = radii_pure > 0
+    visible_mask = (radii_pure > 0 ) & (opacity.squeeze(1) > opacity_limit)
+    
     is_training = pc.get_color_mlp.training
     
     if is_training:

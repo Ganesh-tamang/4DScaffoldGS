@@ -230,9 +230,9 @@ class OptimizationParams(ParamGroup):
         self.update_interval = 100
         self.update_until = 15_000
         
-        self.min_opacity = 0.005
+        self.min_opacity = 0.07
         self.success_threshold = 0.8
-        self.densify_grad_threshold = 0.0002
+        self.densify_grad_threshold = 0.001
         self.iterations = 20_000
         self.coarse_iterations = 2_500
         super().__init__(parser, "Optimization Parameters")

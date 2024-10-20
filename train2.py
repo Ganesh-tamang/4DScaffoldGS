@@ -119,7 +119,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
                 if custom_cam != None:
                     # net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-                    net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"])["render"]
+                    net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"], opacity_limit=msg["opacity_limit"])["render"]
                     # print("show anchor", msg["show_anchor"], msg["show_splatting"])
            
                     # net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
@@ -174,8 +174,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         images = []
         gt_images = []
         radii_list = []
-        visibility_filter_list = []
-        viewspace_point_tensor_list = []
+        # visibility_filter_list = []
+        # viewspace_point_tensor_list = []
 
 
         # for viewpoint_cam in viewpoint_cams:
@@ -197,12 +197,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         gt_images.append(gt_image.unsqueeze(0))
         radii_list.append(radii.unsqueeze(0))
-        visibility_filter_list.append(visibility_filter.unsqueeze(0))
-        viewspace_point_tensor_list.append(viewspace_point_tensor)
+        # visibility_filter_list.append(visibility_filter.unsqueeze(0))
+        # viewspace_point_tensor_list.append(viewspace_point_tensor)
         
 
         # radii = torch.cat(radii_list,0).max(dim=0).values
-        visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
+        # visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
         gt_image_tensor = torch.cat(gt_images,0)        
         # Loss
@@ -229,10 +229,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if torch.isnan(loss).any():
             print("loss is nan,end training, reexecv program now.")
             os.execv(sys.executable, [sys.executable] + sys.argv)
-        viewspace_point_tensor_grad = torch.zeros_like(viewspace_point_tensor)
-        for idx in range(0, len(viewspace_point_tensor_list)):
-            if viewspace_point_tensor_list[idx].grad is not None:
-                viewspace_point_tensor_grad += viewspace_point_tensor_list[idx].grad
+        # viewspace_point_tensor_grad = torch.zeros_like(viewspace_point_tensor)
+        # for idx in range(0, len(viewspace_point_tensor_list)):
+        #     if viewspace_point_tensor_list[idx].grad is not None:
+        #         viewspace_point_tensor_grad += viewspace_point_tensor_list[idx].grad
         iter_end.record()
 
         with torch.no_grad():
@@ -256,7 +256,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 scene.save(iteration, stage)
 
             
-            timer.start()
+            timer.start()   
             # Densification
             if iteration < opt.update_until and iteration > opt.start_stat:
                 # add statis
@@ -264,8 +264,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # densification
                 if iteration > opt.update_from and iteration % opt.update_interval == 0 and gaussians.get_anchor.shape[0] < 150000:
                     # gaussians.prunes_anch()
-                    
+                    print("opacity_min",opt.min_opacity)
                     gaussians.adjust_anchor(check_interval=opt.update_interval, success_threshold=opt.success_threshold, grad_threshold=opt.densify_grad_threshold, min_opacity=opt.min_opacity)
+                
+                if iteration % 3000==0:
+                    gaussians.reset_opacity()
             # Densification
             # elif iteration > 15010 and iteration < 16500:
             #     # add statis
@@ -312,9 +315,9 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, "coarse", tb_writer, 3000,timer)
-    opt.start_stat = 500
-    opt.update_from = 6000
-    opt.update_interval = 500
+    opt.start_stat = 2000
+    opt.update_from = 3000
+    opt.update_interval = 200
     opt.update_until = 10_000
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
@@ -428,7 +431,7 @@ if __name__ == "__main__":
     
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[13000,16000,20000,23000,27000, 30_000])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[3000,16000,20_000,24000,25000, 29_999])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[3000,12000,16000,20_000,24000,25000, 29_999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")

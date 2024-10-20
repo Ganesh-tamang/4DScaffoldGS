@@ -71,6 +71,7 @@ class RemoteViewer(Mini3DViewer):
                 "scaling_modifier": dpg.get_value("_slider_scaling_modifier"),
                 "show_splatting": dpg.get_value("_checkbox_show_splatting"),
                 "show_anchor":dpg.get_value("_checkbox_show_anchor"),
+                "opacity_limit":dpg.get_value("_slider_opacity_changer"),
                 # "show_mesh": dpg.get_value("_checkbox_show_mesh"),
                 # "mesh_opacity": dpg.get_value("_slider_mesh_opacity"),
                 # "use_original_mesh": dpg.get_value("_checkbox_use_original_mesh"),
@@ -302,6 +303,7 @@ class RemoteViewer(Mini3DViewer):
                 def callback_set_scaling_modifier(sender, app_data):
                     self.need_update = True
                 dpg.add_slider_float(label="Scale modifier", width=155, min_value=0, max_value=1, format="%.2f", default_value=1, callback=callback_set_scaling_modifier, tag="_slider_scaling_modifier")
+                dpg.add_slider_float(label="opacity modifier", width=155, min_value=0, max_value=1, format="%.2f", default_value=0, callback=callback_set_scaling_modifier, tag="_slider_opacity_changer")
 
                 
                 dpg.add_separator()
