@@ -72,18 +72,28 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     first_iter += 1
     # lpips_model = lpips.LPIPS(net="alex").cuda()
 
-    test_cams = scene.getTestCameras()
-    print(f"test camera length = {len(scene.getTestCameras())}")
-    print(f"train camera length = {len(scene.getTrainCameras())}")
+    # test_cams = scene.getTestCameras()
+    # print(f"test camera length = {len(scene.getTestCameras())}")
+    # print(f"train camera length = {len(scene.getTrainCameras())}")
     
 
     train_cams = scene.getTrainCameras()
 
 
     if not viewpoint_stack and not opt.dataloader:
+        times = [camera.time for camera in train_cams]
+
+        # Find the minimum and maximum time values
+        min_time = min(times)
+        max_time = max(times)
+
         # dnerf's branch
         viewpoint_stack = [i for i in train_cams]
+        for camera in viewpoint_stack:
+            camera.time = (camera.time - min_time) / (max_time - min_time)
+
         temp_list = copy.deepcopy(viewpoint_stack)
+        
     # 
     batch_size = opt.batch_size
     print("data loading done")
@@ -105,7 +115,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         temp_list = get_stamp_list(viewpoint_stack,0)
         viewpoint_stack = temp_list.copy()
     else:
-        load_in_memory = False                      # 
+        load_in_memory = False
     # count = 0
     
     for iteration in range(first_iter, final_iter+1):        
@@ -156,6 +166,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 loader = iter(viewpoint_stack_loader)
 
         else: 
+            # print("8")
             idx = 0
             viewpoint_cams = []
             
@@ -182,6 +193,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         #     print("ggfg", viewpoint_cam)
 #
         viewpoint_cam = viewpoint_cam.to("cuda")
+        # print(viewpoint_cam, viewpoint_cam.time, viewpoint_cam.uid)
+
         # print(f"vuew pint = {viewpoint_cam.device}")
         # voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe,background,stage=stage,cam_type=scene.dataset_type)
         retain_grad = (iteration < opt.update_until and iteration >= 0)
@@ -264,7 +277,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # densification
                 if iteration > opt.update_from and iteration % opt.update_interval == 0 and gaussians.get_anchor.shape[0] < 150000:
                     # gaussians.prunes_anch()
-                    print("opacity_min",opt.min_opacity)
                     gaussians.adjust_anchor(check_interval=opt.update_interval, success_threshold=opt.success_threshold, grad_threshold=opt.densify_grad_threshold, min_opacity=opt.min_opacity)
                 
                 if iteration % 3000==0:
@@ -314,14 +326,14 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     print(f"train iter = {opt.coarse_iterations}  and finetune = {opt.iterations} start ={opt.start_stat},from ={opt.update_from} update till ={opt.update_until} ")
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "coarse", tb_writer, 3000,timer)
-    opt.start_stat = 2000
-    opt.update_from = 3000
-    opt.update_interval = 200
-    opt.update_until = 10_000
+                         gaussians, scene, "coarse", tb_writer, 3500,timer)
+    opt.start_stat = 3000
+    opt.update_from = 4000
+    opt.update_interval = 300
+    opt.update_until = 13_000
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "fine", tb_writer, 25000,timer)
+                         gaussians, scene, "fine", tb_writer, 30000,timer)
 
 def prepare_output_and_logger(expname):    
     if not args.model_path:

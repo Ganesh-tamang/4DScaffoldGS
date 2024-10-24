@@ -899,8 +899,8 @@ class GaussianModel:
                 self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
                 self._deformation_accum = torch.zeros((self.get_xyz.shape[0], 3), device="cuda")
                         
-    def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.001, min_opacity=0.05):
-        # # adding anchors
+    def adjust_anchor(self, check_interval=100, success_threshold=0.4, grad_threshold=0.001, min_opacity=0.05):
+        # # adding anchors 
         grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]
         grads[grads.isnan()] = 0.0
         grads_norm = torch.norm(grads, dim=-1)

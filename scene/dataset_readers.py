@@ -384,8 +384,9 @@ def readHyperDataInfos(datadir,use_bg_points,eval):
     ply_path = os.path.join(datadir, "points3D_downsample2.ply")
     pcd = fetchPly(ply_path)
     xyz = np.array(pcd.points)
-
-    pcd = pcd._replace(points=xyz)
+    length = int(xyz.shape[0]*0.7)
+    pcd = pcd._replace(points=xyz[:length])
+    # print("length", length,pcd.points.shape[0], xyz.shape[0])
     nerf_normalization = getNerfppNorm(train_cam)
     plot_camera_orientations(train_cam_infos, pcd.points)
     scene_info = SceneInfo(point_cloud=pcd,
