@@ -2,10 +2,14 @@
 .vscode
 output
 build
-submodules\diff-gaussian-rasterization\diff_gaussian_rasterization.egg-info
-submodules\diff-gaussian-rasterization\build
+diff_gaussian_rasterization.egg-info
+depth_diff_gaussian_rasterization.egg-info
+models
+assets
+RAFT
+sam2
+glm
 screenshots
-submodules\simple-knn\build
 data
 tb/
 tb_logs
