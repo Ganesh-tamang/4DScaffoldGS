@@ -2,6 +2,10 @@
 .vscode
 output
 build
+models
+RAFT
+SAM
+third_party
 submodules\diff-gaussian-rasterization\diff_gaussian_rasterization.egg-info
 submodules\diff-gaussian-rasterization\build
 screenshots
