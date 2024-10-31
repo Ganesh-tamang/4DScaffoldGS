@@ -6,6 +6,7 @@ submodules\diff-gaussian-rasterization\diff_gaussian_rasterization.egg-info
 submodules\diff-gaussian-rasterization\build
 screenshots
 submodules\simple-knn\build
+submodules\third_party
 data
 tb/
 tb_logs
