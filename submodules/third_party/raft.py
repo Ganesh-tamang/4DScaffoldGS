@@ -8,7 +8,7 @@ RAFT_PATH_ROOT = join(dirname(__file__), 'RAFT')
 RAFT_PATH_CORE = join(RAFT_PATH_ROOT, 'core')
 sys.path.append(RAFT_PATH_CORE)
 from raft import RAFT, RAFT2  # nopep8
-from utils.utils import InputPadder  # nopep8
+from submodules.third_party.RAFT.core.utilz.utilz import InputPadder  # nopep8
 
 # %%
 # utility functions

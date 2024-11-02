@@ -15,8 +15,6 @@
 #include <cooperative_groups/reduce.h>
 namespace cg = cooperative_groups;
 
-__device__ __constant__ float pi = 3.14159265358979323846f;
-
 // Forward method for converting the input spherical harmonics
 // coefficients of each Gaussian to a simple RGB color.
 __device__ glm::vec3 computeColorFromSH(int idx, int deg, int max_coeffs, const glm::vec3* means, glm::vec3 campos, const float* shs, bool* clamped)
@@ -172,6 +170,11 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	const float tan_fovx, float tan_fovy,
 	const float focal_x, float focal_y,
 	int* radii,
+	float* proj_2D,
+	float* conic_2D,
+	float* conic_2D_inv,
+	float* gs_per_pixel,
+	float* weight_per_gs_pixel,
 	float2* points_xy_image,
 	float* depths,
 	float* cov3Ds,
@@ -252,13 +255,18 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	depths[idx] = p_view.z;
 	radii[idx] = my_radius;
 	points_xy_image[idx] = point_image;
-	// Inverse 2D covariance and opacity neatly pack into one float4
-	conic_opacity[idx] = { conic.x, conic.y, conic.z, opacities[idx]};
+	proj_2D[idx*2 + 0] = ndc2Pix(p_proj.x, W);
+	proj_2D[idx*2 + 1] = ndc2Pix(p_proj.y, H);
 
-	// modified by lt
-	// float det_bias = ((cov.x+0.3) * (cov.z+0.3) - cov.y * cov.y);
-	// conic_opacity[idx] = { conic.x, conic.y, conic.z, opacities[idx]*sqrt(det/det_bias)};
-	
+	conic_2D[idx*3 + 0] = conic.x;
+	conic_2D[idx*3 + 1] = conic.y;
+	conic_2D[idx*3 + 2] = conic.z;
+
+	conic_2D_inv[idx*3 + 0] = cov.x;
+	conic_2D_inv[idx*3 + 1] = cov.y;
+	conic_2D_inv[idx*3 + 2] = cov.z;
+	// Inverse 2D covariance and opacity neatly pack into one float4
+	conic_opacity[idx] = { conic.x, conic.y, conic.z, opacities[idx] };
 	tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
 }
 
@@ -352,11 +360,19 @@ renderCUDA(
 	int W, int H,
 	const float2* __restrict__ points_xy_image,
 	const float* __restrict__ features,
+	const float* __restrict__ depths,
 	const float4* __restrict__ conic_opacity,
-	float* __restrict__ final_T,
+	float* __restrict__ out_alpha,
 	uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ bg_color,
-	float* __restrict__ out_color)
+	float* __restrict__ out_color,
+	float* __restrict__ out_depth,
+	float* __restrict__ proj_2D,
+	float* __restrict__ conic_2D,
+	float* __restrict__ gs_per_pixel,
+	float* __restrict__ weight_per_gs_pixel,
+	float* __restrict__ x_mu
+	)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -387,7 +403,10 @@ renderCUDA(
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
+	float weight = 0;
+	float D = 0;
 
+    uint32_t calc = 0;
 	// Iterate over batches until all done or range is complete
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
 	{
@@ -426,7 +445,6 @@ renderCUDA(
 			// Obtain alpha by multiplying with Gaussian opacity
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix). 
-			// float det = 
 			float alpha = min(0.99f, con_o.w * exp(power));
 			if (alpha < 1.0f / 255.0f)
 				continue;
@@ -440,9 +458,19 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+			weight += alpha * T;
+			D += depths[collected_id[j]] * alpha * T;
 
 			T = test_T;
+			if (calc < 20)
+			{
+                gs_per_pixel[calc * H * W + pix_id] = collected_id[j];
+				weight_per_gs_pixel[calc * H * W + pix_id] = alpha * T;
+				x_mu[calc *2 * H * W + pix_id] = d.x;
+				x_mu[(calc * 2 + 1) * H * W + pix_id] = d.y;
 
+			}
+			calc++;
 			// Keep track of last range entry to update this
 			// pixel.
 			last_contributor = contributor;
@@ -453,11 +481,11 @@ renderCUDA(
 	// rendering data to the frame and auxiliary buffers.
 	if (inside)
 	{
-		final_T[pix_id] = T;
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
-
+		out_alpha[pix_id] = weight; //1 - T;
+		out_depth[pix_id] = D;
 	}
 }
 
@@ -468,11 +496,18 @@ void FORWARD::render(
 	int W, int H,
 	const float2* means2D,
 	const float* colors,
+	const float* depths, 
 	const float4* conic_opacity,
-	float* final_T,
+	float* out_alpha,
 	uint32_t* n_contrib,
 	const float* bg_color,
-	float* out_color)
+	float* out_color,
+	float* out_depth,
+	float* proj_2D,
+	float* conic_2D,
+	float* gs_per_pixel,
+	float* weight_per_gs_pixel,
+	float* x_mu)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -480,11 +515,19 @@ void FORWARD::render(
 		W, H,
 		means2D,
 		colors,
+		depths,
 		conic_opacity,
-		final_T,
+		out_alpha,
 		n_contrib,
 		bg_color,
-		out_color);
+		out_color,
+		out_depth,
+		proj_2D,
+		conic_2D,
+		gs_per_pixel,
+	    weight_per_gs_pixel,
+		x_mu
+		);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
@@ -504,6 +547,11 @@ void FORWARD::preprocess(int P, int D, int M,
 	const float focal_x, float focal_y,
 	const float tan_fovx, float tan_fovy,
 	int* radii,
+	float* proj_2D,
+	float* conic_2D,
+	float* conic_2D_inv,
+	float* gs_per_pixel,
+	float* weight_per_gs_pixel,
 	float2* means2D,
 	float* depths,
 	float* cov3Ds,
@@ -531,6 +579,11 @@ void FORWARD::preprocess(int P, int D, int M,
 		tan_fovx, tan_fovy,
 		focal_x, focal_y,
 		radii,
+		proj_2D,
+		conic_2D,
+		conic_2D_inv,
+		gs_per_pixel,
+		weight_per_gs_pixel,
 		means2D,
 		depths,
 		cov3Ds,
@@ -541,6 +594,7 @@ void FORWARD::preprocess(int P, int D, int M,
 		prefiltered
 		);
 }
+
 
 
 void FORWARD::filter_preprocess(int P, int M,

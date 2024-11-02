@@ -12,9 +12,9 @@ import torch
 from einops import repeat
 
 import math
-from depth_diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+# from depth_diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
-from depth_diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
 def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=None, visible_mask=None, is_training=False, stage="fine", show_anchor=False):
     ## view frustum filtering for acceleration    
@@ -231,6 +231,15 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    # rendered_image, radii, rendered_depth, rendered_alpha, proj_means_2D, conic_2D, conic_2D_inv, gs_per_pixel, weight_per_gs_pixel, x_mu = rasterizer(
+    #     means3D = xyz ,
+    #     means2D = screenspace_points,
+    #     shs = None,
+    #     colors_precomp = color,
+    #     opacities = ch_opacity,
+    #     scales = ch_scaling,
+    #     rotations = ch_rot,
+    #     cov3D_precomp = None)
     rendered_image, radii = rasterizer(
         means3D = xyz ,
         means2D = screenspace_points,
@@ -240,7 +249,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales = ch_scaling,
         rotations = ch_rot,
         cov3D_precomp = None)
-    
+        
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     
     if is_training:

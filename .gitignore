@@ -17,3 +17,6 @@ data
 tb/
 tb_logs
 
+submodules\diff-gaussian-rasterization\third_party\
+glm
+doc
