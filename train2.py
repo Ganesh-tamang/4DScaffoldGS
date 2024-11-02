@@ -314,7 +314,7 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     print(f"train iter = {opt.coarse_iterations}  and finetune = {opt.iterations} start ={opt.start_stat},from ={opt.update_from} update till ={opt.update_until} ")
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "coarse", tb_writer, 3000,timer)
+                         gaussians, scene, "coarse", tb_writer, 3500,timer)
     opt.start_stat = 2000
     opt.update_from = 3000
     opt.update_interval = 200
