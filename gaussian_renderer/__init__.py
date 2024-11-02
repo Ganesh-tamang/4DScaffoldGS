@@ -12,8 +12,9 @@ import torch
 from einops import repeat
 
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from depth_diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
+from depth_diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
 def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel,means3d,feat=None, visible_mask=None, is_training=False, stage="fine", show_anchor=False):
     ## view frustum filtering for acceleration    

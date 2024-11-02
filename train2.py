@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from utils.timer import Timer
 from utils.loader_utils import FineSampler, get_stamp_list
 import lpips
-
+from get_opt_flow import get_flow
 from time import time
 import copy
 
@@ -40,7 +40,7 @@ except ImportError:
     TENSORBOARD_FOUND = False
 def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations, 
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, stage, tb_writer, train_iter,timer):
+                         gaussians, scene, stage, tb_writer, train_iter,timer, optical_flow=True):
     first_iter = 0
 
     gaussians.training_setup(opt)
@@ -93,7 +93,30 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             camera.time = (camera.time - min_time) / (max_time - min_time)
 
         temp_list = copy.deepcopy(viewpoint_stack)
-        
+
+        # if optical_flow:
+        #     image_pairs = []
+        #     for i in range(len(viewpoint_stack) - 1):
+        #         # Access two consecutive camera frames to create a pair
+        #         camera1 = viewpoint_stack[i]
+        #         camera2 = viewpoint_stack[i + 1]
+
+        #         # Retrieve images for the two camera views
+        #         if scene.dataset_type != "PanopticSports":
+        #             gt_image1 = camera1.original_image
+        #             gt_image2 = camera2.original_image
+        #         else:
+        #             gt_image1 = camera1['image']
+        #             gt_image2 = camera2['image']
+        #         if i==0:
+        #             print("image shape",gt_image1.shape, torch.max(gt_image1))
+        #         # Append the pair as a tuple to the list of image pairs
+        #         image_pairs.append((gt_image1.unsqueeze(0), gt_image2.unsqueeze(0)))
+            
+        #     get_flow(image_pairs)
+        #     exit()
+
+                    
     # 
     batch_size = opt.batch_size
     print("data loading done")
