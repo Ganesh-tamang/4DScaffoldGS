@@ -42,6 +42,8 @@ class RemoteViewer(Mini3DViewer):
 
         # network
         self.socket = None
+        self.resume=False
+        self.steps = 0.01
 
         super().__init__(cfg, '4DScaffoldGS - Remote Viewer')
 
@@ -57,6 +59,8 @@ class RemoteViewer(Mini3DViewer):
                 "do_training": self.training,
                 "keep_alive": True,
                 "show_anchor":dpg.get_value("_checkbox_show_anchor"),
+                "opt_render":dpg.get_value("_checkbox_opt_render"),
+
             }
         else:
             message = {
@@ -71,6 +75,8 @@ class RemoteViewer(Mini3DViewer):
                 "scaling_modifier": dpg.get_value("_slider_scaling_modifier"),
                 "show_splatting": dpg.get_value("_checkbox_show_splatting"),
                 "show_anchor":dpg.get_value("_checkbox_show_anchor"),
+                "opt_render":dpg.get_value("_checkbox_opt_render"),
+                "render_opt":dpg.get_value("_checkbox_save_render"),
                 "opacity_limit":dpg.get_value("_slider_opacity_changer"),
                 # "show_mesh": dpg.get_value("_checkbox_show_mesh"),
                 # "mesh_opacity": dpg.get_value("_slider_mesh_opacity"),
@@ -129,7 +135,7 @@ class RemoteViewer(Mini3DViewer):
     def reconnect(self):
         try: 
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(1)
+            self.socket.settimeout(5)
             self.socket.connect((self.cfg.host, self.cfg.port))
             print(f"connected to {self.cfg.host}:{self.cfg.port}")
         except Exception as e:
@@ -143,6 +149,13 @@ class RemoteViewer(Mini3DViewer):
             time.sleep(1)
         else:
             try:
+                if self.resume:
+                    self.timestep += self.steps  
+                    if self.timestep > 1:
+                        self.steps = -0.01
+                    if self.timestep <0:
+                        self.steps = 0.01
+                    dpg.set_value("_slider_timestep", self.timestep)
                 self.send_json()
 
                 # if dpg.get_value('_checkbox_show_splatting') or dpg.get_value('_checkbox_show_mesh'):
@@ -227,11 +240,20 @@ class RemoteViewer(Mini3DViewer):
                     # show splatting
                     def callback_show_splatting(sender, app_data):
                         self.need_update = True
+
+                    def callback_run_time(sender, app_data):
+                        self.resume = app_data
+                        self.need_update = True
                     def callback_show_anchor(sender, app_data):
                         self.need_update = True
+                    def callback_show_render(sender, app_data):
+                        self.need_update = True
                     
-                    dpg.add_checkbox(label="show splatting ", default_value=True, callback=callback_show_splatting, tag="_checkbox_show_splatting")
-                    dpg.add_checkbox(label="show anchor", default_value=False, callback=callback_show_anchor, tag="_checkbox_show_anchor")
+                    dpg.add_checkbox(label="splat_show", default_value=True, callback=callback_show_splatting, tag="_checkbox_show_splatting")
+                    dpg.add_checkbox(label="resume", default_value=False, callback=callback_run_time, tag="_checkbox_run")
+                    dpg.add_checkbox(label="show_anchor", default_value=False, callback=callback_show_anchor, tag="_checkbox_show_anchor")
+                    dpg.add_checkbox(label="opt_render", default_value=False, callback=callback_show_render, tag="_checkbox_opt_render")
+                    dpg.add_checkbox(label="save_render", default_value=False, callback=callback_show_render, tag="_checkbox_save_render")
 
                     # def callback_show_mesh(sender, app_data):
                     #     self.need_update = True

@@ -30,7 +30,9 @@ import lpips
 from get_opt_flow import get_flow
 from time import time
 import copy
-
+from gaussian_renderer.optical_rasterizer import opt_render
+from optical_loss import optical_flow_loss
+import cv2
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
 try:
@@ -79,7 +81,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
     train_cams = scene.getTrainCameras()
 
-
+    camera_dict= {}
     if not viewpoint_stack and not opt.dataloader:
         times = [camera.time for camera in train_cams]
 
@@ -93,6 +95,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             camera.time = (camera.time - min_time) / (max_time - min_time)
 
         temp_list = copy.deepcopy(viewpoint_stack)
+        camera_dict = {camera.time: index for index, camera in enumerate(temp_list)}
 
         # if optical_flow:
         #     image_pairs = []
@@ -141,22 +144,69 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         load_in_memory = False
     # count = 0
     
-    for iteration in range(first_iter, final_iter+1):        
+    for iteration in range(first_iter, final_iter+1): 
+        count = 0    
+        output_folder = "optical_flow"   
         if network_gui.conn == None:
             network_gui.try_connect()
         while network_gui.conn != None:
             try:
                 # custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer = network_gui.receive()
-                custom_cam, msg = network_gui.receive()
-                # print("msg =", msg)
+                custom_cam, msg = network_gui.receive()               
 
                 if custom_cam != None:
+                    if msg["opt_render"]:
+                        net_image= opt_render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"], opacity_limit=msg["opacity_limit"])["render"]                        
+                    else:
                     # net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-                    net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"], opacity_limit=msg["opacity_limit"])["render"]
-                    # print("show anchor", msg["show_anchor"], msg["show_splatting"])
-           
+                        net_image = render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type,scaling_modifier=msg["scaling_modifier"], step=iteration, show_anchor=msg["show_anchor"], opacity_limit=msg["opacity_limit"])["render"]
+                    if msg["render_opt"]:
+                        for viewpoint_cam in temp_list:
+                            count+=1
+                            if count >20 :
+                                break
+                            # render_t1 = opt_render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
+                            # t1 = viewpoint_cam.time
+                            # t2 = camera_dict[t1]
+                            # viewpoint_cam_t2 = temp_list[t2] if t2 < len(temp_list) else temp_list[0]
+                            # render_t2 = opt_render(viewpoint_cam_t2, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
+                            # flow_img = optical_flow_loss(render_t1,render_t2,t2)
+                            
+                            render_t1 = opt_render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
+                            custom_cam.time += 0.05
+                            render_t2 = opt_render(custom_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
+                            flow_img = optical_flow_loss(render_t1,render_t2,custom_cam.time)
+                            output_path = os.path.join(output_folder, f"ground_truth{count}_re.png")
+                            output_path_p = os.path.join(output_folder, f"ground_truth{count}_pre.png")
+
+                            output_path1 = os.path.join(output_folder, f"blend_truth{count}.png")
+
+                            # if scene.dataset_type!="PanopticSports":
+                            #     gt_image = viewpoint_cam_t2.original_image*255
+                            # else:
+                            #     gt_image = viewpoint_cam_t2['image']*255
+                            # gt_image = gt_image.permute(1,2,0).numpy()*255
+                            # cv2.imwrite(output_path, gt_image)
+                            render_image = render_t2["render"].detach().cpu().permute(1,2,0).numpy()*255
+                            cv2.imwrite(output_path_p, render_image)
+
+                            gray_image2 = cv2.cvtColor(flow_img, cv2.COLOR_BGR2GRAY)
+
+                            # Create a mask of non-black pixels
+                            non_black_mask = gray_image2 > 200
+
+                            # non_black_mask = flow_img > [0,0,0]
+                            red_color = np.array([0, 0, 255], dtype=np.uint8)  # Red color in BGR format
+                            # Replace non-black pixels in image1 with red
+                            
+                            render_image[non_black_mask] = red_color
+                            cv2.imwrite(output_path1, render_image)
+
+                            
+
                     # net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 # network_gui.send(net_image_bytes, dataset.source_path)
+                
                 net_dict = {'num_timesteps': custom_cam.time, 'num_points': gaussians._anchor.shape[0]}
                 network_gui.send(net_image, net_dict)
                 if msg['do_training'] and ((iteration < int(opt.iterations)) or not msg['keep_alive']):
@@ -220,8 +270,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         # print(f"vuew pint = {viewpoint_cam.device}")
         # voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe,background,stage=stage,cam_type=scene.dataset_type)
-        retain_grad = (iteration < opt.update_until and iteration >= 0)
+        retain_grad = (iteration < opt.update_until and iteration >= 0)           
+        
         # render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad)
+        # if (iteration% 1000 == 0 and iteration> 500) or iteration > 4000 :
+        #     render_pkg = opt_render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
+        # else:
         render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type, retain_grad=retain_grad, step=iteration)
         
         image, viewspace_point_tensor, visibility_filter, offset_selection_mask, radii, scaling, opacity,voxel_visible_mask  = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["selection_mask"], render_pkg["radii"], render_pkg["scaling"], render_pkg["neural_opacity"],render_pkg['visible_mask']

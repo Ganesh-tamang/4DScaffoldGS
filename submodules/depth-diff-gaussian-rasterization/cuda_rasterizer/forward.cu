@@ -466,10 +466,10 @@ renderCUDA(
 			{
                 gs_per_pixel[calc * H * W + pix_id] = collected_id[j];
 				weight_per_gs_pixel[calc * H * W + pix_id] = alpha * T;
-				x_mu[calc *2 * H * W + pix_id] = d.x;
+				x_mu[calc *2 * H * W + pi x_id] = d.x;
 				x_mu[(calc * 2 + 1) * H * W + pix_id] = d.y;
 
-			}
+			} 
 			calc++;
 			// Keep track of last range entry to update this
 			// pixel.

@@ -6,7 +6,7 @@ import os
 from torch.nn import functional as F
 
 class OccMask(torch.nn.Module):
-    def __init__(self, th=3):
+    def __init__(self, th=1):
         super(OccMask, self).__init__()
         self.th = th
         self.base_coord = None
@@ -33,9 +33,9 @@ class OccMask(torch.nn.Module):
     def get_flow_inconsistency_tensor(self, base_coord, flow_1_2, flow_2_1):
         B, C, H, W = flow_1_2.shape
         sample_grids = base_coord + flow_1_2.permute([0, 2, 3, 1])
-        sample_grids[..., 0] /= (W - 1) / 2
-        sample_grids[..., 1] /= (H - 1) / 2
-        sample_grids -= 1
+        sample_grids[..., 0] = sample_grids[..., 0] / (W - 1) / 2 -1
+        sample_grids[..., 1] = sample_grids[..., 1] /(H - 1) / 2 -1
+        # sample_grids -= 1
         sampled_flow = F.grid_sample(
             flow_2_1, sample_grids, align_corners=True)
         return torch.abs((sampled_flow+flow_1_2).sum(1, keepdim=True))
@@ -64,13 +64,30 @@ def save_optical_flow(flow, output_folder,name, mask=None):
     # Convert HSV to RGB for saving as image
     flow_rgb = cv2.cvtColor(flow_hsv, cv2.COLOR_HSV2BGR)
     if mask is not None:
+        print("masking is the key----------====================")
         flow_hsv = flow_hsv * mask.permute(1,2,0).cpu().numpy()
 
     # Save the optical flow image
     output_path = os.path.join(output_folder, name)
     cv2.imwrite(output_path, flow_rgb)
     print(f"Saved flow image at {output_path}")
+    return flow_hsv
 
+def save_mask(mask, output_folder, name):
+    # Convert the mask to CPU and numpy format
+    mask_np = mask.squeeze(0).cpu().numpy()  # Shape should now be (H, W)
+
+    # Scale mask to 8-bit format (0 and 255) for saving
+    mask_image = (mask_np * 255).astype(np.uint8)  # Converts True to 255 and False to 0
+
+    # Ensure output folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Save the mask image
+    output_path = os.path.join(output_folder, name)
+    cv2.imwrite(output_path, mask_image)
+    print(f"Saved mask image at {output_path}")
 
 def get_flow(pair_imgs,sintel_ckpt=True): #TODO: test with gt flow
         print('precomputing flow...')
@@ -90,7 +107,7 @@ def get_flow(pair_imgs,sintel_ckpt=True): #TODO: test with gt flow
             flow_ij = []
             flow_ji = []
             num_pairs = len(pair_imgs)
-            for i in range(num_pairs):
+            for i in range(2):
                 print(i)
                 imgs_ij = [torch.tensor(pair_imgs[i][0]).float().to(device),
                         torch.tensor(pair_imgs[i][1]).float().to(device)]
@@ -109,8 +126,16 @@ def get_flow(pair_imgs,sintel_ckpt=True): #TODO: test with gt flow
             valid_mask_i = get_valid_flow_mask(flow_ij, flow_ji)
             valid_mask_j = get_valid_flow_mask(flow_ji, flow_ij)
             print("mask is", valid_mask_i[0].shape, valid_mask_j[0].shape)
-            # save_optical_flow(flow,output_folder,f"mask flow{i}.png", valid_mask_i[0])
-            # cv2.imwrite("imagemask.png", (valid_mask_j[0] * torch.ones_like(valid_mask_i[0])).cpu().numpy())
+            for i in range(2):
+                save_optical_flow(flow_ij[i],output_folder,f"mask flow_i{i}.png", valid_mask_i[i])
+                # output_folder = "optical_flow_masks"
+                save_mask(valid_mask_i[i], output_folder, f"valid_mask_i{i}.png")
+                save_mask(valid_mask_j[i], output_folder, f"valid_mask_j{i}.png")
+                save_optical_flow(flow_ji[i],output_folder,f"mask flow_j{i}.png", valid_mask_j[i])
+            
+
+            # cv2.imwrite("imagemask.png", (valid_mask_i[0] * torch.ones_like(valid_mask_i[0])*255).cpu().numpy())
+            
             # mask_image = valid_mask_i[0].squeeze(0).cpu().numpy()  # Shape becomes (800, 800)
 
             # # Optionally, convert the mask to 8-bit if it’s not already in that format
