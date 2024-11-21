@@ -49,10 +49,17 @@ namespace CudaRasterizer
 			const float tan_fovx, float tan_fovy,
 			const bool prefiltered,
 			float* out_color,
+			float* out_depth,
+			float* out_alpha,
+			float* proj_2D,
+			float* conic_2D,
+			float* conic_2D_inv,
+			float* gs_per_pixel,
+			float* weight_per_gs_pixel,
+			float* x_mu,
 			int* radii = nullptr,
 			bool debug = false);
-
-
+			
 		static void visible_filter(
 			std::function<char* (size_t)> geometryBuffer,
 			std::function<char* (size_t)> binningBuffer,
@@ -70,9 +77,7 @@ namespace CudaRasterizer
 			const bool prefiltered,
 			int* radii,
 			bool debug);
-		
-		
-		
+
 		static void backward(
 			const int P, int D, int M, int R,
 			const float* background,
@@ -80,6 +85,7 @@ namespace CudaRasterizer
 			const float* means3D,
 			const float* shs,
 			const float* colors_precomp,
+			const float* alphas,
 			const float* scales,
 			const float scale_modifier,
 			const float* rotations,
@@ -93,10 +99,19 @@ namespace CudaRasterizer
 			char* binning_buffer,
 			char* image_buffer,
 			const float* dL_dpix,
+			const float* dL_dpix_depth,
+			const float* dL_dalphas,
 			float* dL_dmean2D,
 			float* dL_dconic,
 			float* dL_dopacity,
 			float* dL_dcolor,
+			float* dL_ddepth,
+			float* dL_proj_2D,
+			float* dL_conic_2D,
+			float* dL_conic_2D_inv,
+			float* dummy_gs_per_pixel,
+			float* dummy_weight_per_gs_pixel,
+			float* grad_x_mu,
 			float* dL_dmean3D,
 			float* dL_dcov3D,
 			float* dL_dsh,

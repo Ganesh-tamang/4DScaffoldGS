@@ -1,8 +1,8 @@
-# 
-# Toyota Motor Europe NV/SA and its affiliated companies retain all intellectual 
-# property and proprietary rights in and to this software and related documentation. 
-# Any commercial use, reproduction, disclosure or distribution of this software and 
-# related documentation without an express license agreement from Toyota Motor Europe NV/SA 
+#
+# Toyota Motor Europe NV/SA and its affiliated companies retain all intellectual
+# property and proprietary rights in and to this software and related documentation.
+# Any commercial use, reproduction, disclosure or distribution of this software and
+# related documentation without an express license agreement from Toyota Motor Europe NV/SA
 # is strictly prohibited.
 #
 
@@ -29,6 +29,7 @@ class Config(Mini3DViewerConfig):
     training: bool = True
     """start training at launch time"""
 
+
 class RemoteViewer(Mini3DViewer):
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -42,13 +43,15 @@ class RemoteViewer(Mini3DViewer):
 
         # network
         self.socket = None
+        self.resume = False
+        self.steps = 0.01
 
-        super().__init__(cfg, '4DScaffoldGS - Remote Viewer')
+        super().__init__(cfg, "4DScaffoldGS - Remote Viewer")
 
     def send_message(self, message_bytes, message_length):
         self.socket.sendall(message_length)
         self.socket.sendall(message_bytes)
-    
+
     def send_json(self):
         if self.pause_rendering:
             message = {
@@ -56,7 +59,8 @@ class RemoteViewer(Mini3DViewer):
                 "resolution_y": 0,
                 "do_training": self.training,
                 "keep_alive": True,
-                "show_anchor":dpg.get_value("_checkbox_show_anchor"),
+                "show_anchor": dpg.get_value("_checkbox_show_anchor"),
+                "opt_render": dpg.get_value("_checkbox_opt_render"),
             }
         else:
             message = {
@@ -70,22 +74,24 @@ class RemoteViewer(Mini3DViewer):
                 "keep_alive": True,
                 "scaling_modifier": dpg.get_value("_slider_scaling_modifier"),
                 "show_splatting": dpg.get_value("_checkbox_show_splatting"),
-                "show_anchor":dpg.get_value("_checkbox_show_anchor"),
-                "opacity_limit":dpg.get_value("_slider_opacity_changer"),
+                "show_anchor": dpg.get_value("_checkbox_show_anchor"),
+                "opt_render": dpg.get_value("_checkbox_opt_render"),
+                "render_opt": dpg.get_value("_checkbox_save_render"),
+                "opacity_limit": dpg.get_value("_slider_opacity_changer"),
                 # "show_mesh": dpg.get_value("_checkbox_show_mesh"),
                 # "mesh_opacity": dpg.get_value("_slider_mesh_opacity"),
                 # "use_original_mesh": dpg.get_value("_checkbox_use_original_mesh"),
                 "view_matrix": self.cam.world_view_transform.T.flatten().tolist(),  # the transpose is required by gaussian splatting rasterizer
                 "view_projection_matrix": self.cam.full_proj_transform.T.flatten().tolist(),  # the transpose is required by gaussian splatting rasterizer
-                'timestep': self.timestep,
+                "timestep": self.timestep,
             }
         # print("show splatt",dpg.get_value("_checkbox_show_splatting"), "show anchor",dpg.get_value("_checkbox_show_anchor") )
         message_str = json.dumps(message)
 
         message_bytes = message_str.encode("utf-8")
-        message_length = len(message_bytes).to_bytes(4, 'little')
+        message_length = len(message_bytes).to_bytes(4, "little")
         self.send_message(message_bytes, message_length)
-    
+
     def receive_bytes(self, bytes_expected):
         bytes_received = 0
 
@@ -97,7 +103,7 @@ class RemoteViewer(Mini3DViewer):
             chunks.append(chunk)
             bytes_received += len(chunk)
 
-        buffer = b''.join(chunks)
+        buffer = b"".join(chunks)
 
         # # Receive the length of the verification string
         # verify_length_bytes = self.socket.recv(4)
@@ -114,10 +120,10 @@ class RemoteViewer(Mini3DViewer):
         buffer = self.receive_bytes(bytes_expected)
         img = np.frombuffer(buffer, dtype=np.uint8).reshape(height, width, num_channels)
         return img
-    
+
     def receive_json(self):
         messageLength = self.socket.recv(4)
-        messageLength = int.from_bytes(messageLength, 'little')
+        messageLength = int.from_bytes(messageLength, "little")
         message = self.socket.recv(messageLength)
         rec_dict = json.loads(message.decode("utf-8"))
         # print("received json and time steps is",rec_dict["num_timesteps"])
@@ -125,29 +131,38 @@ class RemoteViewer(Mini3DViewer):
         self.num_timesteps = rec_dict["num_timesteps"]
         # dpg.configure_item("_slider_timestep", max_value=self.num_timesteps - 1)
         dpg.set_value("_log_num_points", rec_dict["num_points"])
-    
+
     def reconnect(self):
-        try: 
+        try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(1)
+            self.socket.settimeout(5)
             self.socket.connect((self.cfg.host, self.cfg.port))
             print(f"connected to {self.cfg.host}:{self.cfg.port}")
         except Exception as e:
             if self.socket is not None:
                 self.socket = None
             print("connection failed, retrying...")
-    
+
     def communicate(self):
         if self.socket is None:
             self.reconnect()
             time.sleep(1)
         else:
             try:
+                if self.resume:
+                    self.timestep += self.steps
+                    if self.timestep > 1:
+                        self.steps = -0.01
+                    if self.timestep < 0:
+                        self.steps = 0.01
+                    dpg.set_value("_slider_timestep", self.timestep)
                 self.send_json()
 
                 # if dpg.get_value('_checkbox_show_splatting') or dpg.get_value('_checkbox_show_mesh'):
-                if dpg.get_value('_checkbox_show_splatting') :
-                    img = self.receive_image(self.cam.image_height, self.cam.image_width, 3)
+                if dpg.get_value("_checkbox_show_splatting"):
+                    img = self.receive_image(
+                        self.cam.image_height, self.cam.image_width, 3
+                    )
                     self.render_buffer = img.astype(np.float32) / 255.0
                     dpg.set_value("_texture", self.render_buffer)
 
@@ -159,12 +174,12 @@ class RemoteViewer(Mini3DViewer):
                 if self.socket is not None:
                     self.socket = None
                 time.sleep(1)
-    
+
     def refresh_stat(self):
         if self.last_time_fresh is not None:
             elapsed = time.time() - self.last_time_fresh
             fps = 1 / elapsed
-            dpg.set_value("_log_fps", f'{fps:.1f}')
+            dpg.set_value("_log_fps", f"{fps:.1f}")
         self.last_time_fresh = time.time()
 
         dpg.set_value("_log_pose", str(self.cam.pose.astype(np.float16)))
@@ -199,8 +214,10 @@ class RemoteViewer(Mini3DViewer):
                             dpg.configure_item("_button_train", label="stop")
                             self.timestamp_begin = time.time()
 
-                    label = 'stop' if self.training else 'start'
-                    dpg.add_button(label=label, tag="_button_train", callback=callback_train)
+                    label = "stop" if self.training else "start"
+                    dpg.add_button(
+                        label=label, tag="_button_train", callback=callback_train
+                    )
 
             # rendering options
             with dpg.collapsing_header(label="Render", default_open=True):
@@ -210,7 +227,12 @@ class RemoteViewer(Mini3DViewer):
                     def callback_pause_rendering(sender, app_data):
                         self.pause_rendering = app_data
                         self.need_update = not self.pause_rendering
-                    dpg.add_checkbox(label="pause rendering", default_value=self.pause_rendering, callback=callback_pause_rendering)
+
+                    dpg.add_checkbox(
+                        label="pause rendering",
+                        default_value=self.pause_rendering,
+                        callback=callback_pause_rendering,
+                    )
 
                     # use original mesh
                     # def callback_use_original_mesh(sender, app_data):
@@ -227,11 +249,47 @@ class RemoteViewer(Mini3DViewer):
                     # show splatting
                     def callback_show_splatting(sender, app_data):
                         self.need_update = True
+
+                    def callback_run_time(sender, app_data):
+                        self.resume = app_data
+                        self.need_update = True
+
                     def callback_show_anchor(sender, app_data):
                         self.need_update = True
-                    
-                    dpg.add_checkbox(label="show splatting ", default_value=True, callback=callback_show_splatting, tag="_checkbox_show_splatting")
-                    dpg.add_checkbox(label="show anchor", default_value=False, callback=callback_show_anchor, tag="_checkbox_show_anchor")
+
+                    def callback_show_render(sender, app_data):
+                        self.need_update = True
+
+                    dpg.add_checkbox(
+                        label="splat_show",
+                        default_value=True,
+                        callback=callback_show_splatting,
+                        tag="_checkbox_show_splatting",
+                    )
+                    dpg.add_checkbox(
+                        label="resume",
+                        default_value=False,
+                        callback=callback_run_time,
+                        tag="_checkbox_run",
+                    )
+                    dpg.add_checkbox(
+                        label="show_anchor",
+                        default_value=False,
+                        callback=callback_show_anchor,
+                        tag="_checkbox_show_anchor",
+                    )
+                    dpg.add_checkbox(
+                        label="opt_render",
+                        default_value=False,
+                        callback=callback_show_render,
+                        tag="_checkbox_opt_render",
+                    )
+                    dpg.add_checkbox(
+                        label="save_render",
+                        default_value=False,
+                        callback=callback_show_render,
+                        tag="_checkbox_save_render",
+                    )
 
                     # def callback_show_mesh(sender, app_data):
                     #     self.need_update = True
@@ -243,11 +301,11 @@ class RemoteViewer(Mini3DViewer):
                     elif sender in ["_button_timestep_plus", "_mvKey_Right"]:
                         # self.timestep = min(self.timestep + 1, self.num_timesteps - 1)
                         print(app_data)
-                        self.timestep = min(self.timestep +0.05,1)
+                        self.timestep = min(self.timestep + 0.05, 1)
 
                     elif sender in ["_button_timestep_minus", "_mvKey_Left"]:
                         # self.timestep = max(self.timestep - 1, 0)
-                        self.timestep = max(self.timestep -0.05, 0)
+                        self.timestep = max(self.timestep - 0.05, 0)
 
                     elif sender == "_mvKey_Home":
                         self.timestep = 0
@@ -258,12 +316,29 @@ class RemoteViewer(Mini3DViewer):
                     dpg.set_value("_slider_timestep", self.timestep)
                     print("time step=", self.timestep)
                     self.need_update = True
+
                 with dpg.group(horizontal=True):
                     # dpg.add_slider_int(label="timestep", tag='_slider_timestep', width=155, min_value=0, max_value=self.num_timesteps - 1, format="%d", default_value=0, callback=callback_set_current_frame)
-                    dpg.add_slider_float(label="timestep", tag='_slider_timestep',default_value=0.0, min_value=0.0, max_value=1, format="%.3f",callback=callback_set_current_frame)
+                    dpg.add_slider_float(
+                        label="timestep",
+                        tag="_slider_timestep",
+                        default_value=0.0,
+                        min_value=0.0,
+                        max_value=1,
+                        format="%.3f",
+                        callback=callback_set_current_frame,
+                    )
                     # dpg.add_slider_int(label="timestep", tag='_slider_timestep', width=155, min_value=0, max_value=155, format="%d", default_value=1, callback=callback_set_current_frame)
-                    dpg.add_button(label='-', tag="_button_timestep_minus", callback=callback_set_current_frame)
-                    dpg.add_button(label='+', tag="_button_timestep_plus", callback=callback_set_current_frame)
+                    dpg.add_button(
+                        label="-",
+                        tag="_button_timestep_minus",
+                        callback=callback_set_current_frame,
+                    )
+                    dpg.add_button(
+                        label="+",
+                        tag="_button_timestep_plus",
+                        callback=callback_set_current_frame,
+                    )
 
                 # mesh_opacity slider
                 # def callback_set_opacity(sender, app_data):
@@ -292,49 +367,97 @@ class RemoteViewer(Mini3DViewer):
                 #     self.cam.zfar = app_data
                 #     self.need_update = True
                 # dpg.add_slider_float(label="far", width=155, min_value=1e-3, max_value=2, format="%.5f", default_value=self.cam.zfar, callback=callback_set_far, tag="_slider_far")
-               
+
                 # fov slider
                 def callback_set_fovy(sender, app_data):
                     self.cam.fovy = app_data
                     self.need_update = True
-                dpg.add_slider_int(label="FoV (vertical)", width=155, min_value=1, max_value=120, format="%d deg", default_value=self.cam.fovy, callback=callback_set_fovy, tag="_slider_fovy")
+
+                dpg.add_slider_int(
+                    label="FoV (vertical)",
+                    width=155,
+                    min_value=1,
+                    max_value=120,
+                    format="%d deg",
+                    default_value=self.cam.fovy,
+                    callback=callback_set_fovy,
+                    tag="_slider_fovy",
+                )
 
                 # scaling_modifier slider
                 def callback_set_scaling_modifier(sender, app_data):
                     self.need_update = True
-                dpg.add_slider_float(label="Scale modifier", width=155, min_value=0, max_value=1, format="%.2f", default_value=1, callback=callback_set_scaling_modifier, tag="_slider_scaling_modifier")
-                dpg.add_slider_float(label="opacity modifier", width=155, min_value=0, max_value=1, format="%.2f", default_value=0, callback=callback_set_scaling_modifier, tag="_slider_opacity_changer")
 
-                
+                dpg.add_slider_float(
+                    label="Scale modifier",
+                    width=155,
+                    min_value=0,
+                    max_value=1,
+                    format="%.2f",
+                    default_value=1,
+                    callback=callback_set_scaling_modifier,
+                    tag="_slider_scaling_modifier",
+                )
+                dpg.add_slider_float(
+                    label="opacity modifier",
+                    width=155,
+                    min_value=0,
+                    max_value=1,
+                    format="%.2f",
+                    default_value=0,
+                    callback=callback_set_scaling_modifier,
+                    tag="_slider_opacity_changer",
+                )
+
                 dpg.add_separator()
-                
+
                 # camera
                 with dpg.group(horizontal=True):
+
                     def callback_reset_camera(sender, app_data):
                         self.cam.reset()
                         self.need_update = True
-                        dpg.set_value("_log_pose", str(self.cam.pose.astype(np.float16)))
+                        dpg.set_value(
+                            "_log_pose", str(self.cam.pose.astype(np.float16))
+                        )
                         dpg.set_value("_slider_fovy", self.cam.fovy)
-                    dpg.add_button(label="reset", tag="_button_reset_pose", callback=callback_reset_camera)
+
+                    dpg.add_button(
+                        label="reset",
+                        tag="_button_reset_pose",
+                        callback=callback_reset_camera,
+                    )
                     with dpg.collapsing_header(label="Camera Pose", default_open=False):
-                        dpg.add_text(str(self.cam.pose.astype(np.float16)), tag="_log_pose")
-                
+                        dpg.add_text(
+                            str(self.cam.pose.astype(np.float16)), tag="_log_pose"
+                        )
+
         # widget-dependent handlers ========================================================================================
         with dpg.handler_registry():
-            dpg.add_key_press_handler(dpg.mvKey_Left, callback=callback_set_current_frame, tag='_mvKey_Left')
-            dpg.add_key_press_handler(dpg.mvKey_Right, callback=callback_set_current_frame, tag='_mvKey_Right')
-            dpg.add_key_press_handler(dpg.mvKey_Home, callback=callback_set_current_frame, tag='_mvKey_Home')
-            dpg.add_key_press_handler(dpg.mvKey_End, callback=callback_set_current_frame, tag='_mvKey_End')
+            dpg.add_key_press_handler(
+                dpg.mvKey_Left, callback=callback_set_current_frame, tag="_mvKey_Left"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_Right, callback=callback_set_current_frame, tag="_mvKey_Right"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_Home, callback=callback_set_current_frame, tag="_mvKey_Home"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_End, callback=callback_set_current_frame, tag="_mvKey_End"
+            )
 
             def callbackmouse_wheel(sender, app_data):
                 delta = app_data
                 if dpg.is_item_hovered("_slider_timestep"):
-                    self.timestep = min(max(self.timestep - delta, 0), self.num_timesteps - 1)
+                    self.timestep = min(
+                        max(self.timestep - delta, 0), self.num_timesteps - 1
+                    )
                     dpg.set_value("_slider_timestep", self.timestep)
                     self.need_update = True
+
             dpg.add_mouse_wheel_handler(callback=callbackmouse_wheel)
 
-            
     def run(self):
         while dpg.is_dearpygui_running():
             if self.pause_rendering:
