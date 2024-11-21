@@ -1,4 +1,2 @@
-_base_ = './default.py'
-OptimizationParams = dict(
-
-)
+_base_ = "./default.py"
+OptimizationParams = dict()

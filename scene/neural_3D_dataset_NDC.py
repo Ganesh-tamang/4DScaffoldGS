@@ -67,9 +67,9 @@ def center_poses(poses, blender2opencv):
     poses = poses @ blender2opencv
     pose_avg = average_poses(poses)  # (3, 4)
     pose_avg_homo = np.eye(4)
-    pose_avg_homo[
-        :3
-    ] = pose_avg  # convert to homogeneous coordinate for faster computation
+    pose_avg_homo[:3] = (
+        pose_avg  # convert to homogeneous coordinate for faster computation
+    )
     pose_avg_homo = pose_avg_homo
     # by simply adding 0, 0, 0, 1 as the last row
     last_row = np.tile(np.array([0, 0, 0, 1]), (len(poses), 1, 1))  # (N_images, 1, 4)
@@ -109,15 +109,14 @@ def render_path_spiral(c2w, up, rads, focal, zdelta, zrate, N_rots=2, N=120):
     return render_poses
 
 
-
 def process_video(video_data_save, video_path, img_wh, downsample, transform):
     """
     Load video_path data to video_data_save tensor.
     """
     video_frames = cv2.VideoCapture(video_path)
     count = 0
-    video_images_path = video_path.split('.')[0]
-    image_path = os.path.join(video_images_path,"images")
+    video_images_path = video_path.split(".")[0]
+    image_path = os.path.join(video_images_path, "images")
 
     if not os.path.exists(image_path):
         os.makedirs(image_path)
@@ -127,28 +126,28 @@ def process_video(video_data_save, video_path, img_wh, downsample, transform):
                 video_frame = cv2.cvtColor(video_frame, cv2.COLOR_BGR2RGB)
                 video_frame = Image.fromarray(video_frame)
                 if downsample != 1.0:
-                    
+
                     img = video_frame.resize(img_wh, Image.LANCZOS)
-                img.save(os.path.join(image_path,"%04d.png"%count))
+                img.save(os.path.join(image_path, "%04d.png" % count))
 
                 img = transform(img)
-                video_data_save[count] = img.permute(1,2,0)
+                video_data_save[count] = img.permute(1, 2, 0)
                 count += 1
             else:
                 break
-      
+
     else:
         images_path = os.listdir(image_path)
         images_path.sort()
-        
+
         for path in images_path:
-            img = Image.open(os.path.join(image_path,path))
-            if downsample != 1.0:  
+            img = Image.open(os.path.join(image_path, path))
+            if downsample != 1.0:
                 img = img.resize(img_wh, Image.LANCZOS)
                 img = transform(img)
-                video_data_save[count] = img.permute(1,2,0)
+                video_data_save[count] = img.permute(1, 2, 0)
                 count += 1
-        
+
     video_frames.release()
     print(f"Video {video_path} processed.")
     return None
@@ -160,7 +159,7 @@ def process_videos(videos, skip_index, img_wh, downsample, transform, num_worker
     A multi-threaded function to load all videos fastly and memory-efficiently.
     To save memory, we pre-allocate a tensor to store all the images and spawn multi-threads to load the images into this tensor.
     """
-    all_imgs = torch.zeros(len(videos) - 1, 300, img_wh[-1] , img_wh[-2], 3)
+    all_imgs = torch.zeros(len(videos) - 1, 300, img_wh[-1], img_wh[-2], 3)
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         # start a thread for each video
         current_index = 0
@@ -181,6 +180,7 @@ def process_videos(videos, skip_index, img_wh, downsample, transform, num_worker
                 futures.append(future)
                 current_index += 1
     return all_imgs
+
 
 def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
     """
@@ -294,14 +294,18 @@ class Neural3D_NDC_Dataset(Dataset):
                 poses_i_train.append(i)
         self.poses = poses[poses_i_train]
         self.poses_all = poses
-        self.image_paths, self.image_poses, self.image_times, N_cam, N_time = self.load_images_path(videos, self.split)
+        self.image_paths, self.image_poses, self.image_times, N_cam, N_time = (
+            self.load_images_path(videos, self.split)
+        )
         self.cam_number = N_cam
         self.time_number = N_time
+
     def get_val_pose(self):
         render_poses = self.val_poses
         render_times = torch.linspace(0.0, 1.0, render_poses.shape[0]) * 2.0 - 1.0
         return render_poses, self.time_scale * render_times
-    def load_images_path(self,videos,split):
+
+    def load_images_path(self, videos, split):
         image_paths = []
         image_poses = []
         image_times = []
@@ -309,17 +313,17 @@ class Neural3D_NDC_Dataset(Dataset):
         N_time = 0
         countss = 300
         for index, video_path in enumerate(videos):
-            
+
             if index == self.eval_index:
-                if split =="train":
+                if split == "train":
                     continue
             else:
                 if split == "test":
                     continue
-            N_cams +=1
+            N_cams += 1
             count = 0
-            video_images_path = video_path.split('.')[0]
-            image_path = os.path.join(video_images_path,"images")
+            video_images_path = video_path.split(".")[0]
+            image_path = os.path.join(video_images_path, "images")
             video_frames = cv2.VideoCapture(video_path)
             if not os.path.exists(image_path):
                 print(f"no images saved in {image_path}, extract images from video.")
@@ -327,51 +331,55 @@ class Neural3D_NDC_Dataset(Dataset):
                 this_count = 0
                 while video_frames.isOpened():
                     ret, video_frame = video_frames.read()
-                    if this_count >= countss:break
+                    if this_count >= countss:
+                        break
                     if ret:
                         video_frame = cv2.cvtColor(video_frame, cv2.COLOR_BGR2RGB)
                         video_frame = Image.fromarray(video_frame)
                         if self.downsample != 1.0:
 
                             img = video_frame.resize(self.img_wh, Image.LANCZOS)
-                        img.save(os.path.join(image_path,"%04d.png"%count))
+                        img.save(os.path.join(image_path, "%04d.png" % count))
 
                         # img = transform(img)
                         count += 1
-                        this_count+=1
+                        this_count += 1
                     else:
                         break
-                    
+
             images_path = os.listdir(image_path)
             images_path.sort()
             this_count = 0
             for idx, path in enumerate(images_path):
-                if this_count >=countss:break
-                image_paths.append(os.path.join(image_path,path))
+                if this_count >= countss:
+                    break
+                image_paths.append(os.path.join(image_path, path))
                 pose = np.array(self.poses_all[index])
-                R = pose[:3,:3]
+                R = pose[:3, :3]
                 R = -R
-                R[:,0] = -R[:,0]
-                T = -pose[:3,3].dot(R)
-                image_times.append(idx/countss)
-                image_poses.append((R,T))
+                R[:, 0] = -R[:, 0]
+                T = -pose[:3, 3].dot(R)
+                image_times.append(idx / countss)
+                image_poses.append((R, T))
                 # if self.downsample != 1.0:
                 #     img = video_frame.resize(self.img_wh, Image.LANCZOS)
                 # img.save(os.path.join(image_path,"%04d.png"%count))
-                this_count+=1
+                this_count += 1
             N_time = len(images_path)
 
-                #     video_data_save[count] = img.permute(1,2,0)
-                #     count += 1
+            #     video_data_save[count] = img.permute(1,2,0)
+            #     count += 1
         return image_paths, image_poses, image_times, N_cams, N_time
+
     def __len__(self):
         return len(self.image_paths)
-    def __getitem__(self,index):
+
+    def __getitem__(self, index):
         img = Image.open(self.image_paths[index])
         img = img.resize(self.img_wh, Image.LANCZOS)
 
         img = self.transform(img)
         return img, self.image_poses[index], self.image_times[index]
-    def load_pose(self,index):
-        return self.image_poses[index]
 
+    def load_pose(self, index):
+        return self.image_poses[index]

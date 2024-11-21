@@ -1,8 +1,8 @@
-# 
-# Toyota Motor Europe NV/SA and its affiliated companies retain all intellectual 
-# property and proprietary rights in and to this software and related documentation. 
-# Any commercial use, reproduction, disclosure or distribution of this software and 
-# related documentation without an express license agreement from Toyota Motor Europe NV/SA 
+#
+# Toyota Motor Europe NV/SA and its affiliated companies retain all intellectual
+# property and proprietary rights in and to this software and related documentation.
+# Any commercial use, reproduction, disclosure or distribution of this software and
+# related documentation without an express license agreement from Toyota Motor Europe NV/SA
 # is strictly prohibited.
 #
 
@@ -17,7 +17,14 @@ from dataclasses import dataclass
 import dearpygui.dearpygui as dpg
 
 
-def projection_from_intrinsics(K: np.ndarray, image_size: Tuple[int], near: float=0.01, far:float=10, flip_y: bool=False, z_sign=-1):
+def projection_from_intrinsics(
+    K: np.ndarray,
+    image_size: Tuple[int],
+    near: float = 0.01,
+    far: float = 10,
+    flip_y: bool = False,
+    z_sign=-1,
+):
     """
     Transform points from camera space (x: right, y: up, z: out) to clip space (x: right, y: up, z: in)
     Args:
@@ -57,13 +64,13 @@ def projection_from_intrinsics(K: np.ndarray, image_size: Tuple[int], near: floa
         raise ValueError(f"Expected K to be (N, 3, 3) or (N, 4) but got: {K.shape}")
 
     proj = np.zeros([B, 4, 4])
-    proj[:, 0, 0]  = fx * 2 / w 
-    proj[:, 1, 1]  = fy * 2 / h
-    proj[:, 0, 2]  = (w - 2 * cx) / w
-    proj[:, 1, 2]  = (h - 2 * cy) / h
-    proj[:, 2, 2]  = z_sign * (far+near) / (far-near)
-    proj[:, 2, 3]  = -2*far*near / (far-near)
-    proj[:, 3, 2]  = z_sign
+    proj[:, 0, 0] = fx * 2 / w
+    proj[:, 1, 1] = fy * 2 / h
+    proj[:, 0, 2] = (w - 2 * cx) / w
+    proj[:, 1, 2] = (h - 2 * cy) / h
+    proj[:, 2, 2] = z_sign * (far + near) / (far - near)
+    proj[:, 2, 3] = -2 * far * near / (far - near)
+    proj[:, 3, 2] = z_sign
 
     if flip_y:
         proj[:, 1, 1] *= -1
@@ -71,7 +78,17 @@ def projection_from_intrinsics(K: np.ndarray, image_size: Tuple[int], near: floa
 
 
 class OrbitCamera:
-    def __init__(self, W, H, r=2, fovy=60, znear=0.01, zfar=10, convention: Literal["opengl", "opencv"]="opengl", save_path='camera.json'):
+    def __init__(
+        self,
+        W,
+        H,
+        r=2,
+        fovy=60,
+        znear=0.01,
+        zfar=10,
+        convention: Literal["opengl", "opencv"] = "opengl",
+        save_path="camera.json",
+    ):
         self.image_width = W
         self.image_height = H
         self.radius_default = r
@@ -83,10 +100,10 @@ class OrbitCamera:
 
         self.reset()
         self.load()
-    
+
     def reset(self):
-        """ The internal state of the camera is based on the OpenGL convention, but 
-            properties are converted to the target convention when queried.
+        """The internal state of the camera is based on the OpenGL convention, but
+        properties are converted to the target convention when queried.
         """
         self.rot = R.from_matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])  # OpenGL convention
         self.look_at = np.array([0, 0, 0], dtype=np.float32)  # look at this point
@@ -100,45 +117,51 @@ class OrbitCamera:
             self.y_sign = -1
         else:
             raise ValueError(f"Unknown convention: {self.convention}")
-    
+
     def save(self):
         save_dict = {
-            'rotation': self.rot.as_matrix().tolist(),
-            'look_at': self.look_at.tolist(),
-            'radius': self.radius,
-            'fovy': self.fovy,
+            "rotation": self.rot.as_matrix().tolist(),
+            "look_at": self.look_at.tolist(),
+            "radius": self.radius,
+            "fovy": self.fovy,
         }
         with open(self.save_path, "w") as f:
             json.dump(save_dict, f, indent=4)
-    
+
     def clear(self):
         os.remove(self.save_path)
-    
+
     def load(self):
         if not Path(self.save_path).exists():
             return
         with open(self.save_path, "r") as f:
             load_dict = json.load(f)
-        self.rot = R.from_matrix(np.array(load_dict['rotation']))
-        self.look_at = np.array(load_dict['look_at'])
-        self.radius = load_dict['radius']
-        self.fovy = load_dict['fovy']
+        self.rot = R.from_matrix(np.array(load_dict["rotation"]))
+        self.look_at = np.array(load_dict["look_at"])
+        self.radius = load_dict["radius"]
+        self.fovy = load_dict["fovy"]
 
     @property
     def fovx(self):
         focal = self.image_height / (2 * np.tan(np.radians(self.fovy) / 2))
         fovx = 2 * np.arctan(self.image_width / (2 * focal))
         return np.degrees(fovx)
-    
+
     @property
     def intrinsics(self):
         focal = self.image_height / (2 * np.tan(np.radians(self.fovy) / 2))
         return np.array([focal, focal, self.image_width // 2, self.image_height // 2])
-    
+
     @property
     def projection_matrix(self):
-        return projection_from_intrinsics(self.intrinsics[None], (self.image_height, self.image_width), self.znear, self.zfar, z_sign=self.z_sign)[0]
-    
+        return projection_from_intrinsics(
+            self.intrinsics[None],
+            (self.image_height, self.image_width),
+            self.znear,
+            self.zfar,
+            z_sign=self.z_sign,
+        )[0]
+
     @property
     def world_view_transform(self):
         return np.linalg.inv(self.pose)  # world2cam
@@ -173,12 +196,12 @@ class OrbitCamera:
         axis_x = self.rot.as_matrix()[:3, 0]
         rotvec_x = axis_x * angle_x
         self.rot = R.from_rotvec(rotvec_x) * self.rot
-    
+
     def orbit_y(self, angle_y):
         axis_y = self.rot.as_matrix()[:3, 1]
         rotvec_y = axis_y * angle_y
         self.rot = R.from_rotvec(rotvec_y) * self.rot
-    
+
     def orbit_z(self, angle_z):
         axis_z = self.rot.as_matrix()[:3, 2]
         rotvec_z = axis_z * angle_z
@@ -190,7 +213,15 @@ class OrbitCamera:
     def pan(self, dx=0, dy=0, dz=0):
         # pan in camera coordinate system (careful on the sensitivity!)
         d = np.array([dx, -dy, dz])  # the y axis is flipped
-        self.look_at += 2 * self.rot.as_matrix()[:3, :3] @ d * self.radius / self.image_height * math.tan(np.radians(self.fovy) / 2)
+        self.look_at += (
+            2
+            * self.rot.as_matrix()[:3, :3]
+            @ d
+            * self.radius
+            / self.image_height
+            * math.tan(np.radians(self.fovy) / 2)
+        )
+
 
 @dataclass
 class Mini3DViewerConfig:
@@ -203,14 +234,17 @@ class Mini3DViewerConfig:
     fovy: float = 20
     """default GUI camera fovy"""
 
+
 class Mini3DViewer:
-    def __init__(self, cfg: Mini3DViewerConfig, title='Mini3DViewer'):
+    def __init__(self, cfg: Mini3DViewerConfig, title="Mini3DViewer"):
         self.cfg = cfg
-        
+
         # viewer settings
         self.W = cfg.W
         self.H = cfg.H
-        self.cam = OrbitCamera(self.W, self.H, r=cfg.radius, fovy=cfg.fovy, convention=cfg.cam_convention)
+        self.cam = OrbitCamera(
+            self.W, self.H, r=cfg.radius, fovy=cfg.fovy, convention=cfg.cam_convention
+        )
 
         # buffers for mouse interaction
         self.cursor_x = None
@@ -225,7 +259,7 @@ class Mini3DViewer:
         self.last_time_fresh = None
         self.render_buffer = np.ones((self.W, self.H, 3), dtype=np.float32)
         self.need_update = True  # camera moved, should reset accumulation
-        
+
         # temporal settings
         self.timestep = 0  # the chosen timestep of the dataset
         self.num_timesteps = 1
@@ -239,26 +273,46 @@ class Mini3DViewer:
         dpg.setup_dearpygui()
         dpg.show_viewport()
 
-    
     def __del__(self):
         dpg.destroy_context()
-    
+
     def define_gui(self):
         # register texture =================================================================================================
         with dpg.texture_registry(show=False):
-            dpg.add_raw_texture(self.W, self.H, self.render_buffer, format=dpg.mvFormat_Float_rgb, tag="_texture")
+            dpg.add_raw_texture(
+                self.W,
+                self.H,
+                self.render_buffer,
+                format=dpg.mvFormat_Float_rgb,
+                tag="_texture",
+            )
 
         # register window ==================================================================================================
         # the window to display the rendered image
-        with dpg.window(label="viewer", tag="_canvas_window", width=self.W, height=self.H, no_title_bar=True, no_move=True, no_bring_to_front_on_focus=True, no_resize=True):
+        with dpg.window(
+            label="viewer",
+            tag="_canvas_window",
+            width=self.W,
+            height=self.H,
+            no_title_bar=True,
+            no_move=True,
+            no_bring_to_front_on_focus=True,
+            no_resize=True,
+        ):
             dpg.add_image("_texture", width=self.W, height=self.H, tag="_image")
-        
+
         with dpg.theme() as theme_no_padding:
             with dpg.theme_component(dpg.mvAll):
                 # set all padding to 0 to avoid scroll bar
-                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 0, 0, category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 0, 0, category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 0, 0, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_WindowPadding, 0, 0, category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_FramePadding, 0, 0, category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_CellPadding, 0, 0, category=dpg.mvThemeCat_Core
+                )
         dpg.bind_item_theme("_canvas_window", theme_no_padding)
 
     def register_callbacks(self):
@@ -274,10 +328,22 @@ class Mini3DViewer:
             dpg.delete_item("_image")
 
             with dpg.texture_registry(show=False):
-                dpg.add_raw_texture(self.W, self.H, self.render_buffer, format=dpg.mvFormat_Float_rgb, tag="_texture")
-            dpg.add_image("_texture", width=self.W, height=self.H, tag="_image", parent="_canvas_window")
+                dpg.add_raw_texture(
+                    self.W,
+                    self.H,
+                    self.render_buffer,
+                    format=dpg.mvFormat_Float_rgb,
+                    tag="_texture",
+                )
+            dpg.add_image(
+                "_texture",
+                width=self.W,
+                height=self.H,
+                tag="_image",
+                parent="_canvas_window",
+            )
             dpg.configure_item("_canvas_window", width=self.W, height=self.H)
-        
+
         def callback_mouse_move(sender, app_data):
             self.cursor_x, self.cursor_y = app_data
 
@@ -289,30 +355,44 @@ class Mini3DViewer:
                 else:
                     cursor_x_prev = self.cursor_x_prev
                     cursor_y_prev = self.cursor_y_prev
-                
+
                 # drag with left button
                 if self.drag_button is dpg.mvMouseButton_Left:
                     k = 0.1
                     # rotate around X&Y axis
-                    if self.W*k < self.drag_begin_x < self.W*(1-k) and self.H*k < self.drag_begin_y < self.H*(1-k):
+                    if self.W * k < self.drag_begin_x < self.W * (
+                        1 - k
+                    ) and self.H * k < self.drag_begin_y < self.H * (1 - k):
                         angle_x = np.radians(-0.3 * (self.cursor_y - cursor_y_prev))
                         self.cam.orbit_x(angle_x)
-                        
+
                         angle_y = np.radians(-0.3 * (self.cursor_x - cursor_x_prev))
                         self.cam.orbit_y(angle_y)
                     # rotate around Z axis
                     else:
-                        xy_begin = np.array([self.cursor_x_prev - self.W//2, self.cursor_y_prev - self.H//2])
-                        xy_end = np.array([self.cursor_x - self.W//2, self.cursor_y - self.H//2])
-                        angle_z = np.arctan2(xy_end[1], xy_end[0]) - np.arctan2(xy_begin[1], xy_begin[0])
+                        xy_begin = np.array(
+                            [
+                                self.cursor_x_prev - self.W // 2,
+                                self.cursor_y_prev - self.H // 2,
+                            ]
+                        )
+                        xy_end = np.array(
+                            [self.cursor_x - self.W // 2, self.cursor_y - self.H // 2]
+                        )
+                        angle_z = np.arctan2(xy_end[1], xy_end[0]) - np.arctan2(
+                            xy_begin[1], xy_begin[0]
+                        )
                         self.cam.orbit_z(angle_z)
-                
+
                 # drag with middle button
                 elif self.drag_button is dpg.mvMouseButton_Middle:
                     # Pan in X-Y plane
-                    self.cam.pan(dx=self.cursor_x - cursor_x_prev, dy=self.cursor_y - cursor_y_prev)
+                    self.cam.pan(
+                        dx=self.cursor_x - cursor_x_prev,
+                        dy=self.cursor_y - cursor_y_prev,
+                    )
                 self.need_update = True
-            
+
             self.cursor_x_prev = self.cursor_x
             self.cursor_y_prev = self.cursor_y
 
@@ -323,7 +403,7 @@ class Mini3DViewer:
                 self.drag_begin_x = self.cursor_x
                 self.drag_begin_y = self.cursor_y
                 self.drag_button = app_data[0]
-        
+
         def callback_mouse_release(sender, app_data):
             self.drag_begin_x = None
             self.drag_begin_y = None
@@ -336,20 +416,20 @@ class Mini3DViewer:
             if dpg.is_item_hovered("_canvas_window"):
                 self.cam.scale(delta)
                 self.need_update = True
-        
+
         def callback_key_press(sender, app_data):
             step = 30
-            if sender == '_mvKey_W':
+            if sender == "_mvKey_W":
                 self.cam.pan(dz=step)
-            elif sender == '_mvKey_S':
+            elif sender == "_mvKey_S":
                 self.cam.pan(dz=-step)
-            elif sender == '_mvKey_A':
+            elif sender == "_mvKey_A":
                 self.cam.pan(dx=step)
-            elif sender == '_mvKey_D':
+            elif sender == "_mvKey_D":
                 self.cam.pan(dx=-step)
-            elif sender == '_mvKey_E':
+            elif sender == "_mvKey_E":
                 self.cam.pan(dy=step)
-            elif sender == '_mvKey_Q':
+            elif sender == "_mvKey_Q":
                 self.cam.pan(dy=-step)
 
             self.need_update = True
@@ -364,10 +444,21 @@ class Mini3DViewer:
             dpg.add_mouse_down_handler(callback=callback_mouse_button_down)
             dpg.add_mouse_wheel_handler(callback=callback_mouse_wheel)
 
-            dpg.add_key_press_handler(dpg.mvKey_W, callback=callback_key_press, tag='_mvKey_W')
-            dpg.add_key_press_handler(dpg.mvKey_S, callback=callback_key_press, tag='_mvKey_S')
-            dpg.add_key_press_handler(dpg.mvKey_A, callback=callback_key_press, tag='_mvKey_A')
-            dpg.add_key_press_handler(dpg.mvKey_D, callback=callback_key_press, tag='_mvKey_D')
-            dpg.add_key_press_handler(dpg.mvKey_E, callback=callback_key_press, tag='_mvKey_E')
-            dpg.add_key_press_handler(dpg.mvKey_Q, callback=callback_key_press, tag='_mvKey_Q')
-
+            dpg.add_key_press_handler(
+                dpg.mvKey_W, callback=callback_key_press, tag="_mvKey_W"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_S, callback=callback_key_press, tag="_mvKey_S"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_A, callback=callback_key_press, tag="_mvKey_A"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_D, callback=callback_key_press, tag="_mvKey_D"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_E, callback=callback_key_press, tag="_mvKey_E"
+            )
+            dpg.add_key_press_handler(
+                dpg.mvKey_Q, callback=callback_key_press, tag="_mvKey_Q"
+            )

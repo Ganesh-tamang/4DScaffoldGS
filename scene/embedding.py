@@ -7,6 +7,7 @@ from typing import Optional
 from jaxtyping import Shaped
 from torch import Tensor, nn
 
+
 class FieldComponent(nn.Module):
     """Field modules that can be combined to store and compute the fields.
 
@@ -15,7 +16,9 @@ class FieldComponent(nn.Module):
         out_dim: Output dimension to module.
     """
 
-    def __init__(self, in_dim: Optional[int] = None, out_dim: Optional[int] = None) -> None:
+    def __init__(
+        self, in_dim: Optional[int] = None, out_dim: Optional[int] = None
+    ) -> None:
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -41,7 +44,9 @@ class FieldComponent(nn.Module):
         return self.out_dim
 
     @abstractmethod
-    def forward(self, in_tensor: Shaped[Tensor, "*bs input_dim"]) -> Shaped[Tensor, "*bs output_dim"]:
+    def forward(
+        self, in_tensor: Shaped[Tensor, "*bs input_dim"]
+    ) -> Shaped[Tensor, "*bs output_dim"]:
         """
         Returns processed tensor
 
@@ -49,7 +54,8 @@ class FieldComponent(nn.Module):
             in_tensor: Input tensor to process
         """
         raise NotImplementedError
-  
+
+
 class Embedding(FieldComponent):
     """Index into embeddings.
     # TODO: add different types of initializations
@@ -72,7 +78,9 @@ class Embedding(FieldComponent):
         """Return the mean of the embedding weights along a dim."""
         return self.embedding.weight.mean(dim)
 
-    def forward(self, in_tensor: Shaped[Tensor, "*batch input_dim"]) -> Shaped[Tensor, "*batch output_dim"]:
+    def forward(
+        self, in_tensor: Shaped[Tensor, "*batch input_dim"]
+    ) -> Shaped[Tensor, "*batch output_dim"]:
         """Call forward
 
         Args:

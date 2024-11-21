@@ -2,11 +2,15 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scene.utils import Camera
 from copy import deepcopy
+
+
 def rotation_matrix_to_quaternion(rotation_matrix):
     return R.from_matrix(rotation_matrix).as_quat()
 
+
 def quaternion_to_rotation_matrix(quat):
     return R.from_quat(quat).as_matrix()
+
 
 def quaternion_slerp(q1, q2, t):
     # 计算两个四元数之间的点积
@@ -28,10 +32,15 @@ def quaternion_slerp(q1, q2, t):
     # 计算插值结果
     return np.cos(theta) * q1 + np.sin(theta) * q3
 
+
 def bezier_interpolation(p1, p2, t):
     return (1 - t) * p1 + t * p2
+
+
 def linear_interpolation(v1, v2, t):
     return (1 - t) * v1 + t * v2
+
+
 def smooth_camera_poses(cameras, num_interpolations=5):
     smoothed_cameras = []
     smoothed_times = []
@@ -49,11 +58,13 @@ def smooth_camera_poses(cameras, num_interpolations=5):
             t = j / (num_interpolations + 1)
 
             interp_orientation_quat = quaternion_slerp(quat1, quat2, t)
-            interp_orientation_matrix = quaternion_to_rotation_matrix(interp_orientation_quat)
+            interp_orientation_matrix = quaternion_to_rotation_matrix(
+                interp_orientation_quat
+            )
 
             interp_position = linear_interpolation(cam1.position, cam2.position, t)
 
-            interp_time = i*10 / (len(cameras) - 1) + time_increment * j
+            interp_time = i * 10 / (len(cameras) - 1) + time_increment * j
 
             newcam = deepcopy(cam1)
             newcam.orientation = interp_orientation_matrix
@@ -64,4 +75,3 @@ def smooth_camera_poses(cameras, num_interpolations=5):
     smoothed_times.append(1.0)
     print(smoothed_times)
     return smoothed_cameras, smoothed_times
-

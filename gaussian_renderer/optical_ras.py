@@ -138,7 +138,6 @@ def generate_neural_gaussians(
     # post-process offsets to get centers for gaussians
     offsets = offsets * scaling_repeat[:, :3]
     xyz = repeat_anchor + offsets
-    # print("xyz shape = ",xyz.shape, "color shape = ", color.shape, "scaling =",scaling.shape, "rot shape=",rot.shape)
     if show_anchor:
         neural_opacity = torch.ones([anchor.shape[0], 1], device="cuda:0") * 0.8
         mask = neural_opacity > 0
@@ -166,7 +165,6 @@ def generate_neural_gaussians(
         return xyz, color, opacity, scaling, rot
 
 
-# def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
 def opt_render(
     viewpoint_camera,
     pc: GaussianModel,
